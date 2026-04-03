@@ -1,0 +1,31 @@
+---
+# Optional: Run ocpv-reporter as a scheduled CronJob inside the cluster
+# Adjust the schedule, namespace filter, and output PVC as needed.
+# Requires a PVC named "ocpv-reports" to store HTML/CSV output.
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ocpv-reporter
+  namespace: openshift-virtualization-os-images
+spec:
+  schedule: "0 6 * * *"   # Daily at 06:00 UTC
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ocpv-reporter
+          restartPolicy: OnFailure
+          containers:
+            - name: reporter
+              image: ghcr.io/ocpv-reporter/ocpv-reporter:latest
+              args:
+                - "--output"
+                - "/reports"
+              volumeMounts:
+                - name: reports
+                  mountPath: /reports
+          volumes:
+            - name: reports
+              persistentVolumeClaim:
+                claimName: ocpv-reports
