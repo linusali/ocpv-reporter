@@ -1142,7 +1142,11 @@ Examples:
     print("  ══════════════════════════════════")
 
     # Verify oc login
-    result = subprocess.run(["oc", "whoami"], capture_output=True, text=True)
+    try:
+        result = subprocess.run(["oc", "whoami"], capture_output=True, text=True)
+    except FileNotFoundError:
+        print("✗  'oc' CLI not found. Please install it or ensure it is on your PATH.", file=sys.stderr)
+        sys.exit(1)
     if result.returncode != 0:
         print("✗  Not logged in. Run: oc login <cluster-api-url>", file=sys.stderr)
         sys.exit(1)
