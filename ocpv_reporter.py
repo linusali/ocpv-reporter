@@ -1223,10 +1223,13 @@ Examples:
         try:
             from weasyprint import HTML as WeasyprintHTML
             pdf_path = output_dir / f"ocpv-report-{ts}.pdf"
-            WeasyprintHTML(string=html, base_url=str(output_dir)).write_pdf(str(pdf_path))
+            with open(pdf_path, "wb") as pdf_fh:
+                WeasyprintHTML(string=html, base_url=str(output_dir.resolve())).write_pdf(pdf_fh)
             print(f"  ✓ PDF report:  {pdf_path}")
         except ImportError:
             print("  ✗ PDF export requires weasyprint: pip install weasyprint", file=sys.stderr)
+        except Exception as e:
+            print(f"  ✗ PDF export failed: {e}", file=sys.stderr)
 
     if not args.no_csv:
         export_csv(records, str(output_dir / f"ocpv-vinfo-{ts}.csv"))
