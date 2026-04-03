@@ -399,15 +399,50 @@ def export_nic_csv(records: list[dict], output_path: str):
 
 def phase_badge(phase: str) -> str:
     colors = {
-        "Running": ("#22c55e", "#052e16"),
-        "Stopped": ("#6b7280", "#111827"),
-        "Paused":  ("#f59e0b", "#1c1002"),
-        "Pending": ("#3b82f6", "#0c1a3a"),
+        "Running":    ("#22c55e", "#052e16"),
+        "Stopped":    ("#6b7280", "#111827"),
+        "Paused":     ("#f59e0b", "#1c1002"),
+        "Pending":    ("#3b82f6", "#0c1a3a"),
         "Scheduling": ("#a855f7", "#1a0a2e"),
-        "Failed":  ("#ef4444", "#2d0a0a"),
+        "Failed":     ("#ef4444", "#2d0a0a"),
+        "Error":      ("#f97316", "#1c0800"),
     }
-    bg, fg = colors.get(phase, ("#64748b", "#0f172a"))
+    bg, fg = colors.get(phase, ("#1e40af", "#0c1a3a"))
     return f'<span class="badge" style="background:{bg};color:{fg}">{phase}</span>'
+
+
+def format_k8s_storage(quantity: str) -> str:
+    """Convert a Kubernetes storage quantity to a human-readable GiB string."""
+    if not quantity or quantity in ("?", "—", ""):
+        return quantity
+    q = quantity.strip()
+    try:
+        if q.endswith("Ki"):
+            gib = float(q[:-2]) / (1024 ** 2)
+        elif q.endswith("Mi"):
+            gib = float(q[:-2]) / 1024
+        elif q.endswith("Gi"):
+            gib = float(q[:-2])
+        elif q.endswith("Ti"):
+            gib = float(q[:-2]) * 1024
+        elif q.endswith("Pi"):
+            gib = float(q[:-2]) * 1024 ** 2
+        elif q.endswith("K") or q.endswith("k"):
+            gib = float(q[:-1]) * 1000 / (1024 ** 3)
+        elif q.endswith("M"):
+            gib = float(q[:-1]) * 1e6 / (1024 ** 3)
+        elif q.endswith("G"):
+            gib = float(q[:-1]) * 1e9 / (1024 ** 3)
+        elif q.endswith("T"):
+            gib = float(q[:-1]) * 1e12 / (1024 ** 3)
+        elif q.endswith("P"):
+            gib = float(q[:-1]) * 1e15 / (1024 ** 3)
+        else:
+            # bare integer — treat as bytes
+            gib = float(q) / (1024 ** 3)
+        return f"{gib:.2f} GiB"
+    except ValueError:
+        return quantity
 
 
 def na(val) -> str:
@@ -434,9 +469,9 @@ def generate_html(records: list[dict], cluster_name: str, namespace_filter: str 
           <td>{na(r['node'])}</td>
           <td class="num">{r['cpu_cores']}</td>
           <td class="num metric">{na(r['cpu_used_cores'])}</td>
-          <td>{na(r['mem_requested'])}</td>
+          <td class="ram-col">{na(r['mem_requested'])}</td>
           <td class="num metric">{na(r['mem_used_gib'])} GiB</td>
-          <td class="num">{r['total_disk_gib']} GiB</td>
+          <td class="num disk-col">{r['total_disk_gib']} GiB</td>
           <td>{na(r['ip_addresses'])}</td>
           <td>{na(r['os_name'])}</td>
           <td>{na(r['created'][:10] if r['created'] else '')}</td>
@@ -452,7 +487,7 @@ def generate_html(records: list[dict], cluster_name: str, namespace_filter: str 
           <td class="vm-name">{r['name']}</td>
           <td>{d['name']}</td>
           <td><span class="type-tag">{d['type']}</span></td>
-          <td class="num">{na(d['size'])}</td>
+          <td class="num disk-col">{na(format_k8s_storage(d['size']))}</td>
           <td>{phase_badge(d['phase']) if d['phase'] not in ('N/A','?','—') else na(d['phase'])}</td>
           <td>{na(d['storageClass'])}</td>
           <td class="metric">{na(r['disk_read_bps'])}</td>
@@ -783,6 +818,14 @@ def generate_html(records: list[dict], cluster_name: str, namespace_filter: str 
     td.metric {{
       font-family: 'IBM Plex Mono', monospace;
       color: var(--orange);
+    }}
+    td.ram-col {{
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--blue);
+    }}
+    td.disk-col {{
+      font-family: 'IBM Plex Mono', monospace;
+      color: #2dd4bf;
     }}
     td.mono {{ font-family: 'IBM Plex Mono', monospace; font-size: 11px; }}
     .vm-name {{
