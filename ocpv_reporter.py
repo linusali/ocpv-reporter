@@ -206,7 +206,10 @@ def collect_pvcs(namespace: Optional[str]) -> dict:
     for item in data.get("items", []):
         ns = item["metadata"]["namespace"]
         name = item["metadata"]["name"]
-        storage = item.get("spec", {}).get("resources", {}).get("requests", {}).get("storage", "?")
+        storage = (
+            item.get("spec", {}).get("resources", {}).get("requests", {}).get("storage")
+            or item.get("status", {}).get("capacity", {}).get("storage", "?")
+        )
         phase = item.get("status", {}).get("phase", "?")
         sc = item.get("spec", {}).get("storageClassName", "?")
         result[(ns, name)] = {"storage": storage, "phase": phase, "storageClass": sc}
@@ -260,18 +263,7 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict) -> dict:
                 "name": pvc_name, "type": "DataVolume/PVC",
                 "size": storage, "phase": phase, "storageClass": sc
             })
-            # Parse size
-            if storage != "?":
-                try:
-                    num = float(''.join(c for c in storage if c.isdigit() or c == '.'))
-                    if storage.endswith("Gi"):
-                        total_disk_gib += num
-                    elif storage.endswith("Ti"):
-                        total_disk_gib += num * 1024
-                    elif storage.endswith("Mi"):
-                        total_disk_gib += num / 1024
-                except Exception:
-                    pass
+            total_disk_gib += parse_memory_to_gib(storage)
         elif "persistentVolumeClaim" in vol:
             pvc_name = vol["persistentVolumeClaim"].get("claimName", disk_name)
             pvc = pvcs.get((ns, pvc_name), {})
@@ -282,6 +274,7 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict) -> dict:
                 "name": pvc_name, "type": "PVC",
                 "size": storage, "phase": phase, "storageClass": sc
             })
+            total_disk_gib += parse_memory_to_gib(storage)
         elif "containerDisk" in vol:
             img = vol["containerDisk"].get("image", "?")
             disk_records.append({
@@ -930,6 +923,10 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       <div class="stat-value red">{stopped}</div>
       <div class="stat-label">Stopped</div>
     </div>
+    <div class="stat">
+      <div class="stat-value {'red' if error_vms else 'green'}">{error_vms if error_vms else '✓'}</div>
+      <div class="stat-label">Errors</div>
+    </div>
     <div class="stat-divider"></div>
     <div class="stat">
       <div class="stat-value blue">{total_vcpu}</div>
@@ -942,11 +939,6 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     <div class="stat">
       <div class="stat-value">{fmt_gib(total_disk)}</div>
       <div class="stat-label">Total Disk</div>
-    </div>
-    <div class="stat-divider"></div>
-    <div class="stat">
-      <div class="stat-value {'red' if error_vms else 'green'}">{error_vms if error_vms else '✓'}</div>
-      <div class="stat-label">Errors</div>
     </div>
     <div class="stat-divider"></div>
     <div class="stat">
@@ -1329,15 +1321,14 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   <div class="divider"></div>
   <div class="stat"><div class="stat-value green">{running}</div><div class="stat-label">Running</div></div>
   <div class="stat"><div class="stat-value red">{stopped}</div><div class="stat-label">Stopped</div></div>
-  <div class="divider"></div>
-  <div class="stat"><div class="stat-value blue">{total_vcpu}</div><div class="stat-label">vCPUs</div></div>
-  <div class="stat"><div class="stat-value">{fmt_gib(total_ram)}</div><div class="stat-label">Total RAM</div></div>
-  <div class="stat"><div class="stat-value">{fmt_gib(total_disk)}</div><div class="stat-label">Total Disk</div></div>
-  <div class="divider"></div>
   <div class="stat">
     <div class="stat-value" style="color:{'#dc2626' if error_vms else '#16a34a'}">{error_vms if error_vms else '✓'}</div>
     <div class="stat-label">Errors</div>
   </div>
+  <div class="divider"></div>
+  <div class="stat"><div class="stat-value blue">{total_vcpu}</div><div class="stat-label">vCPUs</div></div>
+  <div class="stat"><div class="stat-value">{fmt_gib(total_ram)}</div><div class="stat-label">Total RAM</div></div>
+  <div class="stat"><div class="stat-value">{fmt_gib(total_disk)}</div><div class="stat-label">Total Disk</div></div>
   <div class="divider"></div>
   <div class="stat"><div class="stat-value">{len(namespaces)}</div><div class="stat-label">Namespaces</div></div>
   <div class="divider"></div>
