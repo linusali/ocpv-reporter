@@ -1102,6 +1102,234 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# PDF report (landscape A4, light theme, all sections)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Optional[str], generated_at: str, logo_b64: Optional[str] = None, logo_mime: str = "image/png") -> str:
+    """Generate a print-optimised HTML for PDF export (landscape, light, all tabs)."""
+    total_vms  = len(records)
+    running    = sum(1 for r in records if r["phase"] == "Running")
+    stopped    = sum(1 for r in records if r["phase"] == "Stopped")
+    total_vcpu = sum(r["cpu_cores"] for r in records)
+    namespaces = sorted(set(r["namespace"] for r in records))
+
+    logo_html = (
+        f'<img src="data:{logo_mime};base64,{logo_b64}" style="height:28px;width:auto;" alt="logo" />'
+        if logo_b64 else '<div class="logo-box">OV</div>'
+    )
+
+    def badge(phase: str) -> str:
+        colors = {
+            "Running":    "#16a34a", "Stopped":  "#6b7280",
+            "Paused":     "#d97706", "Pending":  "#2563eb",
+            "Scheduling": "#7c3aed", "Failed":   "#dc2626",
+        }
+        c = colors.get(phase, "#6b7280")
+        return (f'<span style="background:{c};color:#fff;padding:1px 6px;'
+                f'border-radius:3px;font-size:8px;font-weight:700;'
+                f'text-transform:uppercase;white-space:nowrap">{phase}</span>')
+
+    def cell(v) -> str:
+        return "—" if v in (None, "", "—", 0, 0.0) else str(v)
+
+    # ── vInfo rows ────────────────────────────────────────────────────────────
+    vinfo_rows = ""
+    for r in records:
+        vinfo_rows += (
+            f"<tr><td>{r['namespace']}</td><td><b>{r['name']}</b></td>"
+            f"<td>{badge(r['phase'])}</td>"
+            f"<td>{cell(r['node'])}</td>"
+            f"<td style='text-align:right'>{r['cpu_cores']}</td>"
+            f"<td style='text-align:right'>{cell(r['cpu_used_cores'])}</td>"
+            f"<td>{cell(r['mem_requested'])}</td>"
+            f"<td style='text-align:right'>{cell(r['mem_used_gib'])} GiB</td>"
+            f"<td style='text-align:right'>{r['total_disk_gib']} GiB</td>"
+            f"<td>{cell(r['ip_addresses'])}</td>"
+            f"<td>{cell(r['os_name'])}</td>"
+            f"<td>{r['created'][:10] if r['created'] else '—'}</td></tr>"
+        )
+
+    # ── vDisk rows ────────────────────────────────────────────────────────────
+    vdisk_rows = ""
+    for r in records:
+        for d in r["disks"]:
+            vdisk_rows += (
+                f"<tr><td>{r['namespace']}</td><td><b>{r['name']}</b></td>"
+                f"<td>{d['name']}</td><td>{d['type']}</td>"
+                f"<td style='text-align:right'>{cell(d['size'])}</td>"
+                f"<td>{badge(d['phase']) if d['phase'] not in ('N/A','?','—') else cell(d['phase'])}</td>"
+                f"<td>{cell(d['storageClass'])}</td>"
+                f"<td>{cell(r['disk_read_bps'])}</td><td>{cell(r['disk_write_bps'])}</td>"
+                f"<td style='text-align:right'>{cell(r['disk_read_iops'])}</td>"
+                f"<td style='text-align:right'>{cell(r['disk_write_iops'])}</td></tr>"
+            )
+
+    # ── vNetwork rows ─────────────────────────────────────────────────────────
+    vnet_rows = ""
+    for r in records:
+        for n in r["nics"]:
+            vnet_rows += (
+                f"<tr><td>{r['namespace']}</td><td><b>{r['name']}</b></td>"
+                f"<td>{n['name']}</td><td>{n['model']}</td>"
+                f"<td style='font-family:monospace'>{cell(n['mac'])}</td>"
+                f"<td>{n['binding']}</td><td>{cell(n['network'])}</td>"
+                f"<td>{cell(r['ip_addresses'])}</td>"
+                f"<td>{cell(r['net_rx_bps'])}</td><td>{cell(r['net_tx_bps'])}</td></tr>"
+            )
+
+    ns_filter_line = f"Namespace filter: <b>{namespace_filter}</b> &nbsp;|&nbsp;" if namespace_filter else ""
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    @page {{
+      size: A4 landscape;
+      margin: 1.2cm 1.4cm;
+      @top-left   {{ content: "ocpv-reporter — {cluster_name}"; font-size:7pt; color:#888; }}
+      @top-right  {{ content: "Generated {generated_at}"; font-size:7pt; color:#888; }}
+      @bottom-right {{ content: "Page " counter(page) " of " counter(pages); font-size:7pt; color:#888; }}
+    }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #1a1a1a; background: #fff; }}
+
+    /* ── Header ── */
+    .header {{
+      display: flex; align-items: center; gap: 12px;
+      border-bottom: 2px solid #ee0000; padding-bottom: 8px; margin-bottom: 10px;
+    }}
+    .logo-box {{
+      width: 28px; height: 28px; background: #ee0000; border-radius: 4px;
+      color: #fff; font-weight: 700; font-size: 11px; display: flex;
+      align-items: center; justify-content: center; letter-spacing: -0.5px;
+    }}
+    .header-title {{ font-size: 13pt; font-weight: 700; color: #111; }}
+    .header-sub   {{ font-size: 7pt; color: #666; text-transform: uppercase; letter-spacing: 0.8px; }}
+    .header-meta  {{ margin-left: auto; text-align: right; font-size: 8pt; color: #444; }}
+
+    /* ── Summary ── */
+    .summary {{
+      display: flex; gap: 24px; margin-bottom: 12px;
+      background: #f8f8f8; border: 1px solid #e0e0e0;
+      border-radius: 4px; padding: 8px 14px;
+    }}
+    .stat {{ text-align: center; }}
+    .stat-value {{ font-size: 16pt; font-weight: 700; line-height: 1.1; }}
+    .stat-label {{ font-size: 7pt; color: #666; text-transform: uppercase; letter-spacing: 0.6px; }}
+    .green {{ color: #16a34a; }} .red {{ color: #dc2626; }} .blue {{ color: #2563eb; }}
+    .divider {{ width: 1px; background: #ddd; align-self: stretch; }}
+
+    /* ── Section headings ── */
+    .section {{ margin-bottom: 16px; page-break-inside: avoid; }}
+    .section-heading {{
+      background: #ee0000; color: #fff; font-size: 9pt; font-weight: 700;
+      padding: 3px 8px; border-radius: 3px 3px 0 0;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      display: flex; align-items: center; gap: 8px;
+    }}
+    .section-count {{
+      background: rgba(255,255,255,0.25); padding: 0 5px;
+      border-radius: 3px; font-size: 8pt;
+    }}
+
+    /* ── Tables ── */
+    table {{ width: 100%; border-collapse: collapse; font-size: 8pt; }}
+    thead tr {{ background: #f0f0f0; }}
+    th {{
+      padding: 4px 6px; text-align: left; font-size: 7pt; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px; color: #444;
+      border: 1px solid #ddd; white-space: nowrap;
+    }}
+    td {{
+      padding: 3px 6px; border: 1px solid #e8e8e8;
+      color: #1a1a1a; vertical-align: middle;
+    }}
+    tr:nth-child(even) td {{ background: #fafafa; }}
+    .metric {{ color: #b45309; font-family: monospace; }}
+    .na {{ color: #aaa; }}
+    .page-break {{ page-break-before: always; }}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  {logo_html}
+  <div>
+    <div class="header-title">ocpv-reporter</div>
+    <div class="header-sub">OpenShift Virtualization Inventory</div>
+  </div>
+  <div class="header-meta">
+    <b>{cluster_name}</b><br>
+    {ns_filter_line}Generated {generated_at}<br>
+    ocpv-reporter v{TOOL_VERSION}
+  </div>
+</div>
+
+<div class="summary">
+  <div class="stat"><div class="stat-value">{total_vms}</div><div class="stat-label">Total VMs</div></div>
+  <div class="divider"></div>
+  <div class="stat"><div class="stat-value green">{running}</div><div class="stat-label">Running</div></div>
+  <div class="stat"><div class="stat-value red">{stopped}</div><div class="stat-label">Stopped</div></div>
+  <div class="divider"></div>
+  <div class="stat"><div class="stat-value blue">{total_vcpu}</div><div class="stat-label">Total vCPUs</div></div>
+  <div class="divider"></div>
+  <div class="stat"><div class="stat-value">{len(namespaces)}</div><div class="stat-label">Namespaces</div></div>
+  <div class="divider"></div>
+  <div class="stat" style="text-align:left">
+    <div class="stat-label" style="margin-bottom:3px">Namespaces</div>
+    <div style="font-size:8pt">{"&nbsp; ".join(namespaces)}</div>
+  </div>
+</div>
+
+<!-- vInfo -->
+<div class="section">
+  <div class="section-heading">vInfo <span class="section-count">{total_vms}</span></div>
+  <table>
+    <thead><tr>
+      <th>Namespace</th><th>VM Name</th><th>Status</th><th>Node</th>
+      <th>vCPUs</th><th>CPU Used ●</th><th>Mem Alloc</th><th>Mem Used ●</th>
+      <th>Disk (GiB)</th><th>IP Address</th><th>Guest OS</th><th>Created</th>
+    </tr></thead>
+    <tbody>{vinfo_rows}</tbody>
+  </table>
+</div>
+
+<!-- vDisk -->
+<div class="section page-break">
+  <div class="section-heading">vDisk <span class="section-count">{sum(len(r['disks']) for r in records)}</span></div>
+  <table>
+    <thead><tr>
+      <th>Namespace</th><th>VM Name</th><th>Disk Name</th><th>Type</th>
+      <th>Size</th><th>Phase</th><th>Storage Class</th>
+      <th>Read ●</th><th>Write ●</th><th>Read IOPS ●</th><th>Write IOPS ●</th>
+    </tr></thead>
+    <tbody>{vdisk_rows}</tbody>
+  </table>
+</div>
+
+<!-- vNetwork -->
+<div class="section page-break">
+  <div class="section-heading">vNetwork <span class="section-count">{sum(len(r['nics']) for r in records)}</span></div>
+  <table>
+    <thead><tr>
+      <th>Namespace</th><th>VM Name</th><th>NIC Name</th><th>Model</th>
+      <th>MAC Address</th><th>Binding</th><th>Network</th>
+      <th>IP Address</th><th>RX ●</th><th>TX ●</th>
+    </tr></thead>
+    <tbody>{vnet_rows}</tbody>
+  </table>
+</div>
+
+<p style="font-size:7pt;color:#999;margin-top:8px;text-align:center">
+  ● = live Prometheus metrics (30-minute average) &nbsp;|&nbsp; ocpv-reporter v{TOOL_VERSION}
+</p>
+
+</body>
+</html>"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Main
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1223,8 +1451,9 @@ Examples:
         try:
             from weasyprint import HTML as WeasyprintHTML
             pdf_path = output_dir / f"ocpv-report-{ts}.pdf"
+            pdf_html = generate_pdf_html(records, cluster_name, args.namespace, generated_at, logo_b64, logo_mime)
             with open(pdf_path, "wb") as pdf_fh:
-                WeasyprintHTML(string=html, base_url=str(output_dir.resolve())).write_pdf(pdf_fh)
+                WeasyprintHTML(string=pdf_html, base_url=str(output_dir.resolve())).write_pdf(pdf_fh)
             print(f"  ✓ PDF report:  {pdf_path}")
         except ImportError:
             print("  ✗ PDF export requires weasyprint: pip install weasyprint", file=sys.stderr)
