@@ -4,7 +4,7 @@
 
 A lightweight, zero-dependency\* CLI tool that collects VM inventory and real consumption data from an OpenShift Virtualization cluster and produces a beautiful, filterable HTML report + CSV exports — no ACM, no Grafana, no extra operators required.
 
-> \* Requires only `oc` CLI and Python 3.10+. An optional `kubernetes` Python client is supported but not required.
+> \* Requires only `oc` CLI and Python 3.6+. An optional `kubernetes` Python client is supported but not required.
 
 ---
 
@@ -26,13 +26,14 @@ Metrics marked with **●** are live 30-minute averages pulled from the in-clust
 
 ## Requirements
 
-- Python **3.10+**
+- Python **3.6+**
 - `oc` CLI, logged in to the target cluster (`oc login ...`)
 - `cluster-admin` role **or** `view` on VirtualMachine, VirtualMachineInstance, PVC resources + `cluster-monitoring-view` for Prometheus access
 
 Optional:
 ```bash
 pip install kubernetes   # enables direct k8s API access (faster for large clusters)
+pip install weasyprint   # required for --pdf export
 ```
 
 ---
@@ -56,14 +57,21 @@ python3 ocpv_reporter.py -n my-vm-namespace
 # Output to a specific directory
 python3 ocpv_reporter.py -o /tmp/reports
 
+# Export a PDF report (requires: pip install weasyprint)
+python3 ocpv_reporter.py --pdf
+
+# PDF with a custom logo in the header
+python3 ocpv_reporter.py --pdf --logo /path/to/company-logo.png
+
 # Skip Prometheus metrics (faster, inventory/config only)
 python3 ocpv_reporter.py --no-metrics
 ```
 
-The report files are created in the current directory (or `--output`):
+The report files are created in the current directory (or `-o`):
 
 ```
 ocpv-report-20250403-143022.html     ← Open in browser
+ocpv-report-20250403-143022.pdf      ← Generated with --pdf
 ocpv-vinfo-20250403-143022.csv
 ocpv-vdisk-20250403-143022.csv
 ocpv-vnetwork-20250403-143022.csv
@@ -76,7 +84,7 @@ ocpv-vnetwork-20250403-143022.csv
 ```
 usage: ocpv_reporter.py [-h] [-n NAMESPACE] [-o OUTPUT] [--no-metrics]
                         [--prom-url PROM_URL] [--no-html] [--no-csv]
-                        [--version]
+                        [--pdf] [--logo LOGO] [--version]
 
 options:
   -n, --namespace   Namespace to report on (default: all namespaces)
@@ -85,6 +93,9 @@ options:
   --prom-url        Override Prometheus URL, e.g. localhost:9090 for port-forwarding
   --no-html         Skip HTML report
   --no-csv          Skip CSV exports
+  --pdf             Export a PDF report (requires: pip install weasyprint)
+  --logo PATH       Path to a custom logo image (PNG/JPEG/SVG/GIF/WebP)
+                    embedded inline in the HTML and PDF report header
   --version         Show version
 ```
 
