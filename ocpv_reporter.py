@@ -417,7 +417,7 @@ def na(val) -> str:
     return str(val)
 
 
-def generate_html(records: list, cluster_name: str, namespace_filter: Optional[str], generated_at: str) -> str:
+def generate_html(records: list, cluster_name: str, namespace_filter: Optional[str], generated_at: str, logo_b64: Optional[str] = None, logo_mime: str = "image/png") -> str:
     total_vms = len(records)
     running = sum(1 for r in records if r["phase"] == "Running")
     stopped = sum(1 for r in records if r["phase"] == "Stopped")
@@ -482,6 +482,11 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
 
     # ── Summary cards ─────────────────────────────────────────────────────────
     ns_pills = " ".join(f'<span class="ns-pill">{n}</span>' for n in namespaces)
+    logo_html = (
+        f'<img src="data:{logo_mime};base64,{logo_b64}" '
+        f'style="height:36px;width:auto;border-radius:6px;" alt="logo" />'
+        if logo_b64 else '<div class="logo-icon">OV</div>'
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -853,7 +858,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
 
 <header class="header">
   <div class="logo">
-    <div class="logo-icon">OV</div>
+    {logo_html}
     <div>
       <div class="logo-text">ocpv-reporter</div>
       <div class="logo-sub">OpenShift Virtualization Inventory</div>
@@ -1123,6 +1128,12 @@ Examples:
   # Output to a custom directory
   python3 ocpv_reporter.py -o /tmp/reports
 
+  # Export PDF report
+  python3 ocpv_reporter.py --pdf
+
+  # Export PDF with a custom logo
+  python3 ocpv_reporter.py --pdf --logo /path/to/logo.png
+
   # Skip Prometheus metrics (config/inventory only)
   python3 ocpv_reporter.py --no-metrics
 
@@ -1136,6 +1147,8 @@ Examples:
     parser.add_argument("--prom-url", help="Override Prometheus URL (host:port, no scheme)")
     parser.add_argument("--no-html", action="store_true", help="Skip HTML report generation")
     parser.add_argument("--no-csv", action="store_true", help="Skip CSV export")
+    parser.add_argument("--pdf", action="store_true", help="Export a PDF report (requires: pip install weasyprint)")
+    parser.add_argument("--logo", help="Path to a custom logo image (PNG/JPEG/SVG) embedded in the report header")
     parser.add_argument("--version", action="version", version=f"ocpv-reporter {TOOL_VERSION}")
     args = parser.parse_args()
 
@@ -1185,12 +1198,35 @@ Examples:
     records.sort(key=lambda r: (r["namespace"], r["name"]))
     print(f"  ✓ Processed {len(records)} VM records")
 
+    # ── Load custom logo ──────────────────────────────────────────────────────
+    logo_b64, logo_mime = None, "image/png"
+    if args.logo:
+        logo_path = Path(args.logo)
+        if not logo_path.exists():
+            print(f"  ✗ Logo file not found: {args.logo}", file=sys.stderr)
+            sys.exit(1)
+        ext = logo_path.suffix.lower().lstrip(".")
+        logo_mime = {"svg": "image/svg+xml", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                     "gif": "image/gif", "webp": "image/webp"}.get(ext, "image/png")
+        logo_b64 = base64.b64encode(logo_path.read_bytes()).decode()
+        print(f"  ✓ Logo loaded: {args.logo}")
+
     # ── Export ────────────────────────────────────────────────────────────────
+    html = generate_html(records, cluster_name, args.namespace, generated_at, logo_b64, logo_mime)
+
     if not args.no_html:
         html_path = output_dir / f"ocpv-report-{ts}.html"
-        html = generate_html(records, cluster_name, args.namespace, generated_at)
         html_path.write_text(html)
         print(f"  ✓ HTML report: {html_path}")
+
+    if args.pdf:
+        try:
+            from weasyprint import HTML as WeasyprintHTML
+            pdf_path = output_dir / f"ocpv-report-{ts}.pdf"
+            WeasyprintHTML(string=html, base_url=str(output_dir)).write_pdf(str(pdf_path))
+            print(f"  ✓ PDF report:  {pdf_path}")
+        except ImportError:
+            print("  ✗ PDF export requires weasyprint: pip install weasyprint", file=sys.stderr)
 
     if not args.no_csv:
         export_csv(records, str(output_dir / f"ocpv-vinfo-{ts}.csv"))
