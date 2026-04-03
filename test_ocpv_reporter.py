@@ -177,6 +177,28 @@ def test_parse_vm_error_state_failed():
     assert rec["error_state"] == "Failed"
 
 
+def test_parse_vm_pvc_disk_counted():
+    """Direct PVC volumes must be included in total_disk_gib."""
+    vm_with_pvc = {
+        "metadata": {"name": "pvc-vm", "namespace": "dev-vms", "creationTimestamp": ""},
+        "spec": {
+            "runStrategy": "Always",
+            "template": {"spec": {
+                "domain": {
+                    "cpu": {"cores": 1, "sockets": 1, "threads": 1},
+                    "resources": {"requests": {"memory": "2Gi"}, "limits": {"memory": "2Gi"}},
+                    "devices": {"interfaces": []},
+                },
+                "networks": [],
+                "volumes": [{"name": "disk0", "persistentVolumeClaim": {"claimName": "my-pvc"}}],
+            }},
+        },
+    }
+    pvcs = {("dev-vms", "my-pvc"): {"storage": "100Gi", "phase": "Bound", "storageClass": "ceph-rbd"}}
+    rec = parse_vm(vm_with_pvc, {}, pvcs, {})
+    assert rec["total_disk_gib"] == 100.0
+
+
 def test_parse_vm_error_state_unschedulable():
     """VMI with ErrorUnschedulable condition → error_state == 'ErrorUnschedulable'."""
     unschedulable_vmi = {
