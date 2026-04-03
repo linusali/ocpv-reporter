@@ -1186,69 +1186,66 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   <style>
     @page {{
       size: A4 landscape;
-      margin: 1.2cm 1.4cm;
-      @top-left   {{ content: "ocpv-reporter — {cluster_name}"; font-size:7pt; color:#888; }}
-      @top-right  {{ content: "Generated {generated_at}"; font-size:7pt; color:#888; }}
-      @bottom-right {{ content: "Page " counter(page) " of " counter(pages); font-size:7pt; color:#888; }}
+      margin: 0.4cm 0.5cm;
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #1a1a1a; background: #fff; }}
+    body {{ font-family: Helvetica, Arial, sans-serif; font-size: 8pt; color: #1a1a1a; background: #fff; }}
 
     /* ── Header ── */
     .header {{
-      display: flex; align-items: center; gap: 12px;
-      border-bottom: 2px solid #ee0000; padding-bottom: 8px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 2px solid #ee0000; padding-bottom: 5px; margin-bottom: 6px;
     }}
     .logo-box {{
-      width: 28px; height: 28px; background: #ee0000; border-radius: 4px;
-      color: #fff; font-weight: 700; font-size: 11px; display: flex;
-      align-items: center; justify-content: center; letter-spacing: -0.5px;
+      width: 24px; height: 24px; background: #ee0000; border-radius: 3px;
+      color: #fff; font-weight: 700; font-size: 9px; display: flex;
+      align-items: center; justify-content: center;
     }}
-    .header-title {{ font-size: 13pt; font-weight: 700; color: #111; }}
-    .header-sub   {{ font-size: 7pt; color: #666; text-transform: uppercase; letter-spacing: 0.8px; }}
-    .header-meta  {{ margin-left: auto; text-align: right; font-size: 8pt; color: #444; }}
+    .header-title {{ font-size: 11pt; font-weight: 700; color: #111; }}
+    .header-sub   {{ font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.8px; }}
+    .header-meta  {{ margin-left: auto; text-align: right; font-size: 7pt; color: #444; line-height: 1.4; }}
 
     /* ── Summary ── */
     .summary {{
-      display: flex; gap: 24px; margin-bottom: 12px;
-      background: #f8f8f8; border: 1px solid #e0e0e0;
-      border-radius: 4px; padding: 8px 14px;
+      display: flex; gap: 16px; margin-bottom: 6px; align-items: center;
+      background: #f5f5f5; border: 1px solid #ddd;
+      border-radius: 3px; padding: 4px 10px;
     }}
     .stat {{ text-align: center; }}
-    .stat-value {{ font-size: 16pt; font-weight: 700; line-height: 1.1; }}
-    .stat-label {{ font-size: 7pt; color: #666; text-transform: uppercase; letter-spacing: 0.6px; }}
+    .stat-value {{ font-size: 13pt; font-weight: 700; line-height: 1.1; }}
+    .stat-label {{ font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }}
     .green {{ color: #16a34a; }} .red {{ color: #dc2626; }} .blue {{ color: #2563eb; }}
-    .divider {{ width: 1px; background: #ddd; align-self: stretch; }}
+    .divider {{ width: 1px; background: #ccc; align-self: stretch; }}
 
     /* ── Section headings ── */
-    .section {{ margin-bottom: 16px; page-break-inside: avoid; }}
+    .section {{ margin-bottom: 8px; }}
     .section-heading {{
-      background: #ee0000; color: #fff; font-size: 9pt; font-weight: 700;
-      padding: 3px 8px; border-radius: 3px 3px 0 0;
-      text-transform: uppercase; letter-spacing: 0.5px;
-      display: flex; align-items: center; gap: 8px;
+      background: #ee0000; color: #fff; font-size: 7.5pt; font-weight: 700;
+      padding: 2px 6px; border-radius: 2px 2px 0 0;
+      text-transform: uppercase; letter-spacing: 0.4px;
+      display: flex; align-items: center; gap: 6px;
     }}
     .section-count {{
-      background: rgba(255,255,255,0.25); padding: 0 5px;
-      border-radius: 3px; font-size: 8pt;
+      background: rgba(255,255,255,0.25); padding: 0 4px;
+      border-radius: 2px; font-size: 7pt;
     }}
 
     /* ── Tables ── */
-    table {{ width: 100%; border-collapse: collapse; font-size: 8pt; }}
-    thead tr {{ background: #f0f0f0; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 7.5pt; table-layout: fixed; }}
+    thead tr {{ background: #efefef; }}
     th {{
-      padding: 4px 6px; text-align: left; font-size: 7pt; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.5px; color: #444;
-      border: 1px solid #ddd; white-space: nowrap;
+      padding: 3px 5px; text-align: left; font-size: 6.5pt; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.4px; color: #444;
+      border: 1px solid #d8d8d8; white-space: nowrap; overflow: hidden;
     }}
     td {{
-      padding: 3px 6px; border: 1px solid #e8e8e8;
+      padding: 2px 5px; border: 1px solid #e5e5e5;
       color: #1a1a1a; vertical-align: middle;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }}
-    tr:nth-child(even) td {{ background: #fafafa; }}
-    .metric {{ color: #b45309; font-family: monospace; }}
-    .na {{ color: #aaa; }}
+    tr:nth-child(even) td {{ background: #f9f9f9; }}
     .page-break {{ page-break-before: always; }}
+    .footer {{ font-size: 6.5pt; color: #999; text-align: center; margin-top: 5px; }}
   </style>
 </head>
 <body>
@@ -1260,9 +1257,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
     <div class="header-sub">OpenShift Virtualization Inventory</div>
   </div>
   <div class="header-meta">
-    <b>{cluster_name}</b><br>
-    {ns_filter_line}Generated {generated_at}<br>
-    ocpv-reporter v{TOOL_VERSION}
+    <b>{cluster_name}</b> &nbsp;|&nbsp; {ns_filter_line}Generated {generated_at} &nbsp;|&nbsp; v{TOOL_VERSION}
   </div>
 </div>
 
@@ -1272,20 +1267,22 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   <div class="stat"><div class="stat-value green">{running}</div><div class="stat-label">Running</div></div>
   <div class="stat"><div class="stat-value red">{stopped}</div><div class="stat-label">Stopped</div></div>
   <div class="divider"></div>
-  <div class="stat"><div class="stat-value blue">{total_vcpu}</div><div class="stat-label">Total vCPUs</div></div>
+  <div class="stat"><div class="stat-value blue">{total_vcpu}</div><div class="stat-label">vCPUs</div></div>
   <div class="divider"></div>
   <div class="stat"><div class="stat-value">{len(namespaces)}</div><div class="stat-label">Namespaces</div></div>
   <div class="divider"></div>
-  <div class="stat" style="text-align:left">
-    <div class="stat-label" style="margin-bottom:3px">Namespaces</div>
-    <div style="font-size:8pt">{"&nbsp; ".join(namespaces)}</div>
-  </div>
+  <div style="font-size:7pt;color:#555">{"&nbsp;&nbsp;".join(namespaces)}</div>
 </div>
 
 <!-- vInfo -->
 <div class="section">
   <div class="section-heading">vInfo <span class="section-count">{total_vms}</span></div>
   <table>
+    <colgroup>
+      <col style="width:9%"><col style="width:10%"><col style="width:7%"><col style="width:9%">
+      <col style="width:5%"><col style="width:7%"><col style="width:7%"><col style="width:7%">
+      <col style="width:7%"><col style="width:10%"><col style="width:14%"><col style="width:8%">
+    </colgroup>
     <thead><tr>
       <th>Namespace</th><th>VM Name</th><th>Status</th><th>Node</th>
       <th>vCPUs</th><th>CPU Used ●</th><th>Mem Alloc</th><th>Mem Used ●</th>
@@ -1299,6 +1296,11 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
 <div class="section page-break">
   <div class="section-heading">vDisk <span class="section-count">{sum(len(r['disks']) for r in records)}</span></div>
   <table>
+    <colgroup>
+      <col style="width:9%"><col style="width:11%"><col style="width:11%"><col style="width:9%">
+      <col style="width:6%"><col style="width:7%"><col style="width:15%">
+      <col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:8%">
+    </colgroup>
     <thead><tr>
       <th>Namespace</th><th>VM Name</th><th>Disk Name</th><th>Type</th>
       <th>Size</th><th>Phase</th><th>Storage Class</th>
@@ -1312,6 +1314,11 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
 <div class="section page-break">
   <div class="section-heading">vNetwork <span class="section-count">{sum(len(r['nics']) for r in records)}</span></div>
   <table>
+    <colgroup>
+      <col style="width:9%"><col style="width:11%"><col style="width:9%"><col style="width:7%">
+      <col style="width:12%"><col style="width:8%"><col style="width:12%">
+      <col style="width:11%"><col style="width:10%"><col style="width:11%">
+    </colgroup>
     <thead><tr>
       <th>Namespace</th><th>VM Name</th><th>NIC Name</th><th>Model</th>
       <th>MAC Address</th><th>Binding</th><th>Network</th>
@@ -1321,9 +1328,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   </table>
 </div>
 
-<p style="font-size:7pt;color:#999;margin-top:8px;text-align:center">
-  ● = live Prometheus metrics (30-minute average) &nbsp;|&nbsp; ocpv-reporter v{TOOL_VERSION}
-</p>
+<p class="footer">● = live Prometheus metrics (30-minute average) &nbsp;|&nbsp; ocpv-reporter v{TOOL_VERSION}</p>
 
 </body>
 </html>"""
