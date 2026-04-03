@@ -7,7 +7,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from ocpv_reporter import bytes_to_gib, bytes_to_mib, format_bps, parse_vm, phase_badge
+from ocpv_reporter import bytes_to_gib, bytes_to_mib, format_bps, parse_vm, phase_badge, parse_memory_to_gib
 
 
 # ── Utility tests ─────────────────────────────────────────────────────────────
@@ -147,3 +147,46 @@ def test_parse_vm_run_strategy():
     vm = {**SAMPLE_VM, "spec": {**SAMPLE_VM["spec"], "runStrategy": "Halted"}}
     rec = parse_vm(vm, {}, SAMPLE_PVCS, {})
     assert rec["configured_state"] == "Halted"
+
+
+# ── Memory parsing tests ──────────────────────────────────────────────────────
+
+def test_parse_memory_to_gib():
+    assert parse_memory_to_gib("1Gi")   == 1.0
+    assert parse_memory_to_gib("2Gi")   == 2.0
+    assert parse_memory_to_gib("512Mi") == 0.5
+    assert parse_memory_to_gib("1Ti")   == 1024.0
+    assert parse_memory_to_gib("")      == 0.0
+    assert parse_memory_to_gib("—")     == 0.0
+
+
+# ── Error state detection tests ───────────────────────────────────────────────
+
+def test_parse_vm_error_state_clean():
+    """Healthy running VM — no error state."""
+    vmis = {("dev-vms", "test-vm"): SAMPLE_VMI["dev-vms/test-vm"]}
+    rec = parse_vm(SAMPLE_VM, vmis, SAMPLE_PVCS, {})
+    assert rec["error_state"] == ""
+
+
+def test_parse_vm_error_state_failed():
+    """VMI in Failed phase → error_state == 'Failed'."""
+    failed_vmi = {"status": {"phase": "Failed", "conditions": []}}
+    vmis = {("dev-vms", "test-vm"): failed_vmi}
+    rec = parse_vm(SAMPLE_VM, vmis, SAMPLE_PVCS, {})
+    assert rec["error_state"] == "Failed"
+
+
+def test_parse_vm_error_state_unschedulable():
+    """VMI with ErrorUnschedulable condition → error_state == 'ErrorUnschedulable'."""
+    unschedulable_vmi = {
+        "status": {
+            "phase": "Scheduling",
+            "conditions": [
+                {"type": "Ready", "status": "False", "reason": "ErrorUnschedulable"}
+            ],
+        }
+    }
+    vmis = {("dev-vms", "test-vm"): unschedulable_vmi}
+    rec = parse_vm(SAMPLE_VM, vmis, SAMPLE_PVCS, {})
+    assert rec["error_state"] == "ErrorUnschedulable"

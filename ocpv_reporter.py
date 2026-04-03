@@ -144,6 +144,28 @@ def format_bps(bps: float) -> str:
     return f"{bps:.0f} B/s"
 
 
+def parse_memory_to_gib(mem_str: str) -> float:
+    """Parse a Kubernetes memory string (e.g. '4Gi', '512Mi', '1Ti') to GiB."""
+    if not mem_str or mem_str in ("—", "?"):
+        return 0.0
+    try:
+        if mem_str.endswith("Ti"):
+            return float(mem_str[:-2]) * 1024
+        if mem_str.endswith("Gi"):
+            return float(mem_str[:-2])
+        if mem_str.endswith("Mi"):
+            return float(mem_str[:-2]) / 1024
+        if mem_str.endswith("Ki"):
+            return float(mem_str[:-2]) / (1024 ** 2)
+        if mem_str.endswith("G"):
+            return float(mem_str[:-1]) * (10 ** 9 / 1024 ** 3)
+        if mem_str.endswith("M"):
+            return float(mem_str[:-1]) * (10 ** 6 / 1024 ** 3)
+        return float(mem_str) / (1024 ** 3)  # assume bytes
+    except (ValueError, TypeError):
+        return 0.0
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Inventory collection
 # ══════════════════════════════════════════════════════════════════════════════
@@ -303,6 +325,20 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict) -> dict:
     ip_addresses = [i.get("ipAddress", "") for i in vmi_ifaces if i.get("ipAddress")]
     ip_str = ", ".join(ip_addresses) if ip_addresses else "—"
 
+    # ── Error / problematic state ─────────────────────────────────────────────
+    error_state = ""
+    if phase == "Failed":
+        error_state = "Failed"
+    else:
+        for c in vmi_status.get("conditions", []):
+            reason = c.get("reason", "")
+            if reason in ("ErrorUnschedulable", "Unschedulable"):
+                error_state = "ErrorUnschedulable"
+                break
+            if (c.get("type") == "Ready" and c.get("status") == "False"
+                    and phase not in ("Stopped", "Paused", "")):
+                error_state = reason or "NotReady"
+
     # ── Prometheus metrics ─────────────────────────────────────────────────────
     key = (ns, name)
     cpu_used_cores = round(metrics.get("cpu_usage", {}).get(key, 0.0), 4)
@@ -348,6 +384,8 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict) -> dict:
         "disk_write_iops": round(disk_w_iops, 1) if disk_w_iops else "—",
         "net_rx_bps": format_bps(net_rx) if net_rx else "—",
         "net_tx_bps": format_bps(net_tx) if net_tx else "—",
+        # Error state (empty string = healthy)
+        "error_state": error_state,
     }
 
 
@@ -418,11 +456,17 @@ def na(val) -> str:
 
 
 def generate_html(records: list, cluster_name: str, namespace_filter: Optional[str], generated_at: str, logo_b64: Optional[str] = None, logo_mime: str = "image/png") -> str:
-    total_vms = len(records)
-    running = sum(1 for r in records if r["phase"] == "Running")
-    stopped = sum(1 for r in records if r["phase"] == "Stopped")
-    total_vcpu = sum(r["cpu_cores"] for r in records)
-    namespaces = sorted(set(r["namespace"] for r in records))
+    total_vms   = len(records)
+    running     = sum(1 for r in records if r["phase"] == "Running")
+    stopped     = sum(1 for r in records if r["phase"] == "Stopped")
+    total_vcpu  = sum(r["cpu_cores"] for r in records)
+    total_ram   = round(sum(parse_memory_to_gib(r["mem_requested"]) for r in records), 1)
+    total_disk  = round(sum(r["total_disk_gib"] for r in records), 1)
+    error_vms   = sum(1 for r in records if r.get("error_state"))
+    namespaces  = sorted(set(r["namespace"] for r in records))
+
+    def fmt_gib(gib: float) -> str:
+        return f"{gib / 1024:.1f} TiB" if gib >= 1024 else f"{gib} GiB"
 
     # ── vInfo rows ────────────────────────────────────────────────────────────
     vinfo_rows = ""
@@ -891,6 +935,19 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       <div class="stat-value blue">{total_vcpu}</div>
       <div class="stat-label">Total vCPUs</div>
     </div>
+    <div class="stat">
+      <div class="stat-value">{fmt_gib(total_ram)}</div>
+      <div class="stat-label">Total RAM</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{fmt_gib(total_disk)}</div>
+      <div class="stat-label">Total Disk</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-value {'red' if error_vms else 'green'}">{error_vms if error_vms else '✓'}</div>
+      <div class="stat-label">Errors</div>
+    </div>
     <div class="stat-divider"></div>
     <div class="stat">
       <div class="stat-value">{len(namespaces)}</div>
@@ -1110,8 +1167,14 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
     total_vms  = len(records)
     running    = sum(1 for r in records if r["phase"] == "Running")
     stopped    = sum(1 for r in records if r["phase"] == "Stopped")
-    total_vcpu = sum(r["cpu_cores"] for r in records)
-    namespaces = sorted(set(r["namespace"] for r in records))
+    total_vcpu  = sum(r["cpu_cores"] for r in records)
+    total_ram   = round(sum(parse_memory_to_gib(r["mem_requested"]) for r in records), 1)
+    total_disk  = round(sum(r["total_disk_gib"] for r in records), 1)
+    error_vms   = sum(1 for r in records if r.get("error_state"))
+    namespaces  = sorted(set(r["namespace"] for r in records))
+
+    def fmt_gib(gib: float) -> str:
+        return f"{gib / 1024:.1f} TiB" if gib >= 1024 else f"{gib} GiB"
 
     logo_html = (
         f'<img src="data:{logo_mime};base64,{logo_b64}" style="height:28px;width:auto;" alt="logo" />'
@@ -1268,6 +1331,13 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   <div class="stat"><div class="stat-value red">{stopped}</div><div class="stat-label">Stopped</div></div>
   <div class="divider"></div>
   <div class="stat"><div class="stat-value blue">{total_vcpu}</div><div class="stat-label">vCPUs</div></div>
+  <div class="stat"><div class="stat-value">{fmt_gib(total_ram)}</div><div class="stat-label">Total RAM</div></div>
+  <div class="stat"><div class="stat-value">{fmt_gib(total_disk)}</div><div class="stat-label">Total Disk</div></div>
+  <div class="divider"></div>
+  <div class="stat">
+    <div class="stat-value" style="color:{'#dc2626' if error_vms else '#16a34a'}">{error_vms if error_vms else '✓'}</div>
+    <div class="stat-label">Errors</div>
+  </div>
   <div class="divider"></div>
   <div class="stat"><div class="stat-value">{len(namespaces)}</div><div class="stat-label">Namespaces</div></div>
   <div class="divider"></div>
