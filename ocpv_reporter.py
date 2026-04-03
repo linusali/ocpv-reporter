@@ -21,6 +21,7 @@ import urllib.request
 import ssl
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional, Union
 
 # ── Optional: kubernetes Python client ──────────────────────────────────────
 try:
@@ -49,7 +50,7 @@ PROM_QUERIES = {
 # Data collection helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
-def run_oc(args: list) -> dict | list | None:
+def run_oc(args: list) -> Optional[Union[dict, list]]:
     """Run an oc command and return parsed JSON output."""
     cmd = ["oc"] + args + ["-o", "json"]
     try:
@@ -147,7 +148,7 @@ def format_bps(bps: float) -> str:
 # Inventory collection
 # ══════════════════════════════════════════════════════════════════════════════
 
-def collect_vms(namespace: str | None) -> list[dict]:
+def collect_vms(namespace: Optional[str]) -> list:
     """Collect VirtualMachine specs from the cluster."""
     ns_args = ["--all-namespaces"] if not namespace else ["-n", namespace]
     print("  → Fetching VirtualMachine specs...")
@@ -157,7 +158,7 @@ def collect_vms(namespace: str | None) -> list[dict]:
     return data.get("items", [])
 
 
-def collect_vmis(namespace: str | None) -> dict:
+def collect_vmis(namespace: Optional[str]) -> dict:
     """Collect VirtualMachineInstance runtime state, keyed by (namespace, name)."""
     ns_args = ["--all-namespaces"] if not namespace else ["-n", namespace]
     print("  → Fetching VirtualMachineInstance runtime state...")
@@ -172,7 +173,7 @@ def collect_vmis(namespace: str | None) -> dict:
     return result
 
 
-def collect_pvcs(namespace: str | None) -> dict:
+def collect_pvcs(namespace: Optional[str]) -> dict:
     """Collect PVC sizes keyed by (namespace, name)."""
     ns_args = ["--all-namespaces"] if not namespace else ["-n", namespace]
     print("  → Fetching PersistentVolumeClaims...")
@@ -416,7 +417,7 @@ def na(val) -> str:
     return str(val)
 
 
-def generate_html(records: list[dict], cluster_name: str, namespace_filter: str | None, generated_at: str) -> str:
+def generate_html(records: list, cluster_name: str, namespace_filter: Optional[str], generated_at: str) -> str:
     total_vms = len(records)
     running = sum(1 for r in records if r["phase"] == "Running")
     stopped = sum(1 for r in records if r["phase"] == "Stopped")
