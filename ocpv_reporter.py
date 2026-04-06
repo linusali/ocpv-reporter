@@ -166,6 +166,23 @@ def parse_memory_to_gib(mem_str: str) -> float:
         return 0.0
 
 
+def fmt_storage(raw: str) -> str:
+    """Convert a raw Kubernetes storage value (bytes or suffix) to a readable string."""
+    if not raw or raw in ("?", "—"):
+        return raw or "—"
+    gib = parse_memory_to_gib(raw)
+    if gib == 0.0:
+        return raw
+    if gib >= 1024:
+        v = round(gib / 1024, 2)
+        return f"{int(v) if v == int(v) else v} TiB"
+    if gib >= 1:
+        v = round(gib, 1)
+        return f"{int(v) if v == int(v) else v} GiB"
+    v = round(gib * 1024, 1)
+    return f"{int(v) if v == int(v) else v} MiB"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Inventory collection
 # ══════════════════════════════════════════════════════════════════════════════
@@ -261,7 +278,7 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict) -> dict:
             sc = pvc.get("storageClass", "?")
             disk_records.append({
                 "name": pvc_name, "type": "DataVolume/PVC",
-                "size": storage, "phase": phase, "storageClass": sc
+                "size": fmt_storage(storage), "phase": phase, "storageClass": sc
             })
             total_disk_gib += parse_memory_to_gib(storage)
         elif "persistentVolumeClaim" in vol:
@@ -272,7 +289,7 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict) -> dict:
             sc = pvc.get("storageClass", "?")
             disk_records.append({
                 "name": pvc_name, "type": "PVC",
-                "size": storage, "phase": phase, "storageClass": sc
+                "size": fmt_storage(storage), "phase": phase, "storageClass": sc
             })
             total_disk_gib += parse_memory_to_gib(storage)
         elif "containerDisk" in vol:
@@ -459,7 +476,9 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     namespaces  = sorted(set(r["namespace"] for r in records))
 
     def fmt_gib(gib: float) -> str:
-        return f"{gib / 1024:.1f} TiB" if gib >= 1024 else f"{gib} GiB"
+        if gib >= 1024:
+            return f'{gib/1024:.1f}<span class="stat-unit">TiB</span>'
+        return f'{gib}<span class="stat-unit">GiB</span>'
 
     # ── vInfo rows ────────────────────────────────────────────────────────────
     vinfo_rows = ""
@@ -641,7 +660,9 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     }}
     .stat-value.green {{ color: var(--green); }}
     .stat-value.red {{ color: var(--accent2); }}
+    .stat-value.orange {{ color: var(--orange); }}
     .stat-value.blue {{ color: var(--blue); }}
+    .stat-unit {{ font-size: 0.52em; color: var(--text-dim); font-weight: 400; margin-left: 2px; }}
     .stat-label {{
       font-size: 10px;
       text-transform: uppercase;
@@ -920,11 +941,11 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       <div class="stat-label">Running</div>
     </div>
     <div class="stat">
-      <div class="stat-value red">{stopped}</div>
+      <div class="stat-value orange">{stopped}</div>
       <div class="stat-label">Stopped</div>
     </div>
     <div class="stat">
-      <div class="stat-value {'red' if error_vms else 'green'}">{error_vms if error_vms else '✓'}</div>
+      <div class="stat-value {'red' if error_vms else 'green'}">{error_vms if error_vms else "✓"}</div>
       <div class="stat-label">Errors</div>
     </div>
     <div class="stat-divider"></div>
@@ -1166,7 +1187,9 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
     namespaces  = sorted(set(r["namespace"] for r in records))
 
     def fmt_gib(gib: float) -> str:
-        return f"{gib / 1024:.1f} TiB" if gib >= 1024 else f"{gib} GiB"
+        if gib >= 1024:
+            return f'{gib/1024:.1f}<span class="stat-unit">TiB</span>'
+        return f'{gib}<span class="stat-unit">GiB</span>'
 
     logo_html = (
         f'<img src="data:{logo_mime};base64,{logo_b64}" style="height:28px;width:auto;" alt="logo" />'
@@ -1269,7 +1292,8 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
     .stat {{ text-align: center; }}
     .stat-value {{ font-size: 13pt; font-weight: 700; line-height: 1.1; }}
     .stat-label {{ font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }}
-    .green {{ color: #16a34a; }} .red {{ color: #dc2626; }} .blue {{ color: #2563eb; }}
+    .green {{ color: #16a34a; }} .red {{ color: #dc2626; }} .orange {{ color: #f59e0b; }} .blue {{ color: #2563eb; }}
+    .stat-unit {{ font-size: 0.55em; color: #aaa; font-weight: 400; margin-left: 2px; }}
     .divider {{ width: 1px; background: #ccc; align-self: stretch; }}
 
     /* ── Section headings ── */
@@ -1320,9 +1344,9 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   <div class="stat"><div class="stat-value">{total_vms}</div><div class="stat-label">Total VMs</div></div>
   <div class="divider"></div>
   <div class="stat"><div class="stat-value green">{running}</div><div class="stat-label">Running</div></div>
-  <div class="stat"><div class="stat-value red">{stopped}</div><div class="stat-label">Stopped</div></div>
+  <div class="stat"><div class="stat-value orange">{stopped}</div><div class="stat-label">Stopped</div></div>
   <div class="stat">
-    <div class="stat-value" style="color:{'#dc2626' if error_vms else '#16a34a'}">{error_vms if error_vms else '✓'}</div>
+    <div class="stat-value {'red' if error_vms else 'green'}">{error_vms if error_vms else "✓"}</div>
     <div class="stat-label">Errors</div>
   </div>
   <div class="divider"></div>
