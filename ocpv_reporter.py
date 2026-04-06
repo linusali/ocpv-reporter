@@ -233,7 +233,7 @@ def collect_pvcs(namespace: Optional[str]) -> dict:
     return result
 
 
-def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict) -> dict:
+def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict, include_cloudinit: bool = False) -> dict:
     """Merge VM spec + VMI runtime + PVC data + Prometheus metrics into one record."""
     meta = vm.get("metadata", {})
     spec = vm.get("spec", {})
@@ -298,7 +298,12 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict) -> dict:
                 "name": disk_name, "type": "ContainerDisk",
                 "size": "—", "phase": "N/A", "storageClass": img
             })
-        # CloudInit volumes are config-only — excluded from disk inventory
+        elif "cloudInitNoCloud" in vol or "cloudInitConfigDrive" in vol:
+            if include_cloudinit:
+                disk_records.append({
+                    "name": disk_name, "type": "CloudInit",
+                    "size": "—", "phase": "N/A", "storageClass": "—"
+                })
 
     # ── NICs ──────────────────────────────────────────────────────────────────
     interfaces = domain.get("devices", {}).get("interfaces", [])
@@ -1467,6 +1472,7 @@ Examples:
     parser.add_argument("--no-csv", action="store_true", help="Skip CSV export")
     parser.add_argument("--pdf", action="store_true", help="Export a PDF report (requires: pip install weasyprint)")
     parser.add_argument("--logo", help="Path to a custom logo image (PNG/JPEG/SVG) embedded in the report header")
+    parser.add_argument("--show-cloudinit", action="store_true", help="Include CloudInit config drives in the vDisk report (hidden by default)")
     parser.add_argument("--version", action="version", version=f"ocpv-reporter {TOOL_VERSION}")
     args = parser.parse_args()
 
@@ -1512,7 +1518,7 @@ Examples:
 
     # ── Build records ─────────────────────────────────────────────────────────
     print("\n[3/3] Building report...")
-    records = [parse_vm(vm, vmis, pvcs, metrics) for vm in vms]
+    records = [parse_vm(vm, vmis, pvcs, metrics, include_cloudinit=args.show_cloudinit) for vm in vms]
     records.sort(key=lambda r: (r["namespace"], r["name"]))
     print(f"  ✓ Processed {len(records)} VM records")
 
