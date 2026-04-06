@@ -623,7 +623,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     logo_html = (
         f'<img src="data:{logo_mime};base64,{logo_b64}" '
         f'style="height:36px;width:auto;border-radius:6px;" alt="logo" />'
-        if logo_b64 else '<div class="logo-icon">OV</div>'
+        if logo_b64 else '<div class="logo-icon">OVR</div>'
     )
 
     return f"""<!DOCTYPE html>
@@ -684,10 +684,10 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       border-radius: 6px;
       display: flex; align-items: center; justify-content: center;
       font-family: 'IBM Plex Mono', monospace;
-      font-weight: 600;
-      font-size: 14px;
+      font-weight: 700;
+      font-size: 12px;
       color: white;
-      letter-spacing: -1px;
+      letter-spacing: -0.5px;
     }}
     .logo-text {{
       font-family: 'IBM Plex Mono', monospace;
@@ -1015,7 +1015,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     {logo_html}
     <div>
       <div class="logo-text">ovr</div>
-      <div class="logo-sub">OpenShift Virtualization Inventory</div>
+      <div class="logo-sub">OpenShift Virtualization Reporter</div>
     </div>
   </div>
   <div class="header-meta">
@@ -1291,7 +1291,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
 
     logo_html = (
         f'<img src="data:{logo_mime};base64,{logo_b64}" style="height:28px;width:auto;" alt="logo" />'
-        if logo_b64 else '<div class="logo-box">OV</div>'
+        if logo_b64 else '<div class="logo-box">OVR</div>'
     )
 
     def badge(phase: str) -> str:
@@ -1384,8 +1384,8 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
       border-bottom: 2px solid #ee0000; padding-bottom: 5px; margin-bottom: 6px;
     }}
     .logo-box {{
-      width: 24px; height: 24px; background: #ee0000; border-radius: 3px;
-      color: #fff; font-weight: 700; font-size: 9px; display: flex;
+      width: 30px; height: 24px; background: #ee0000; border-radius: 3px;
+      color: #fff; font-weight: 700; font-size: 8px; display: flex;
       align-items: center; justify-content: center;
     }}
     .header-title {{ font-size: 11pt; font-weight: 700; color: #111; }}
@@ -1450,7 +1450,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   {logo_html}
   <div>
     <div class="header-title">ovr</div>
-    <div class="header-sub">OpenShift Virtualization Inventory</div>
+    <div class="header-sub">OpenShift Virtualization Reporter</div>
   </div>
   <div class="header-meta">
     <b>{cluster_name}</b> &nbsp;|&nbsp; {ns_filter_line}Generated {generated_at} &nbsp;|&nbsp; v{TOOL_VERSION}
