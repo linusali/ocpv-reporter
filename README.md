@@ -201,21 +201,58 @@ oc adm policy add-cluster-role-to-user cluster-monitoring-view <your-user>
 
 ## Running in a Container (no local Python needed)
 
+A pre-built image is published to the GitHub Container Registry on every push to `main` and on every version tag.
+
 ```bash
+# Pull the latest image
+docker pull ghcr.io/linusali/ocpv-reporter:latest
+
+# Run — mount your kubeconfig and an output directory
 docker run --rm \
   -v ~/.kube:/root/.kube:ro \
-  -v $(pwd)/reports:/reports \
-  ghcr.io/ocpv-reporter/ocpv-reporter:latest \
-  -o /reports
+  -v $(pwd)/reports:/output \
+  ghcr.io/linusali/ocpv-reporter:latest
+
+# Specific namespace, skip metrics
+docker run --rm \
+  -v ~/.kube:/root/.kube:ro \
+  -v $(pwd)/reports:/output \
+  ghcr.io/linusali/ocpv-reporter:latest \
+  -n my-vm-namespace --no-metrics
+
+# Export PDF as well
+docker run --rm \
+  -v ~/.kube:/root/.kube:ro \
+  -v $(pwd)/reports:/output \
+  ghcr.io/linusali/ocpv-reporter:latest \
+  --pdf
 ```
 
-*(Container image coming soon — contributions welcome!)*
+The image includes `weasyprint` so `--pdf` works out of the box. All report files are written to `/output` inside the container — mount a host directory there to retrieve them.
+
+### Available tags
+
+| Tag | Description |
+|-----|-------------|
+| `latest` | Latest build from `main` |
+| `1.2.3` | Specific release version |
+| `sha-abc1234` | Exact commit build |
+
+### Build locally
+
+```bash
+docker build -t ocpv-reporter .
+docker run --rm \
+  -v ~/.kube:/root/.kube:ro \
+  -v $(pwd)/reports:/output \
+  ocpv-reporter
+```
 
 ---
 
 ## Roadmap
 
-- [ ] Container image (ghcr.io)
+- [x] Container image (ghcr.io/linusali/ocpv-reporter)
 - [ ] `--format json` output for pipeline integration
 - [ ] Instance type / preference reporting (KubeVirt InstanceTypes)
 - [ ] Snapshot inventory tab (vSnapshot)
