@@ -327,6 +327,12 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict, include_cloudinit:
     vmi_status = vmi.get("status", {}) if vmi else {}
     node = vmi_status.get("nodeName", "—")
     phase = vmi_status.get("phase", "Stopped")
+    # KubeVirt keeps VMI phase as "Running" when paused — detect via condition
+    if phase == "Running" and any(
+        c.get("type") == "Paused" and c.get("status") == "True"
+        for c in vmi_status.get("conditions", [])
+    ):
+        phase = "Paused"
     guest_os = vmi_status.get("guestOSInfo", {})
     os_name = guest_os.get("prettyName", guest_os.get("name", "—"))
     machine_type = vmi_status.get("machine", {}).get("type", "—")
@@ -547,6 +553,7 @@ def rs_badge(cpu_pct: Optional[float], mem_pct: Optional[float], thresholds: dic
 def generate_html(records: list, cluster_name: str, namespace_filter: Optional[str], generated_at: str, logo_b64: Optional[str] = None, logo_mime: str = "image/png", rs_thresholds: Optional[dict] = None) -> str:
     total_vms   = len(records)
     running     = sum(1 for r in records if r["phase"] == "Running")
+    paused      = sum(1 for r in records if r["phase"] == "Paused")
     stopped     = sum(1 for r in records if r["phase"] == "Stopped")
     total_vcpu  = sum(r["cpu_cores"] for r in records)
     total_ram   = round(sum(parse_memory_to_gib(r["mem_requested"]) for r in records), 1)
@@ -622,7 +629,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     ns_pills = " ".join(f'<span class="ns-pill">{n}</span>' for n in namespaces)
     logo_html = (
         f'<img src="data:{logo_mime};base64,{logo_b64}" '
-        f'style="height:36px;width:auto;border-radius:6px;" alt="logo" />'
+        f'style="height:36px;width:auto;max-width:160px;border-radius:6px;" alt="logo" />'
         if logo_b64 else '<div class="logo-icon">OVR</div>'
     )
 
@@ -648,6 +655,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       --green:     #22c55e;
       --blue:      #3b82f6;
       --orange:    #f59e0b;
+      --yellow:    #eab308;
       --purple:    #a855f7;
       --cyan:      #06b6d4;
       --tab-h:     48px;
@@ -745,6 +753,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     .stat-value.green {{ color: var(--green); }}
     .stat-value.red {{ color: var(--accent2); }}
     .stat-value.orange {{ color: var(--orange); }}
+    .stat-value.yellow {{ color: var(--yellow); }}
     .stat-value.blue {{ color: var(--blue); }}
     .stat-value.purple {{ color: var(--purple); }}
     .stat-value.cyan {{ color: var(--cyan); }}
@@ -1037,6 +1046,10 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       <div class="stat-label">Running</div>
     </div>
     <div class="stat">
+      <div class="stat-value yellow">{paused}</div>
+      <div class="stat-label">Paused</div>
+    </div>
+    <div class="stat">
       <div class="stat-value orange">{stopped}</div>
       <div class="stat-label">Stopped</div>
     </div>
@@ -1276,6 +1289,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
     """Generate a print-optimised HTML for PDF export (landscape, light, all tabs)."""
     total_vms  = len(records)
     running    = sum(1 for r in records if r["phase"] == "Running")
+    paused     = sum(1 for r in records if r["phase"] == "Paused")
     stopped    = sum(1 for r in records if r["phase"] == "Stopped")
     total_vcpu  = sum(r["cpu_cores"] for r in records)
     total_ram   = round(sum(parse_memory_to_gib(r["mem_requested"]) for r in records), 1)
@@ -1290,7 +1304,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
         return f'{gib}<span class="stat-unit">GiB</span>'
 
     logo_html = (
-        f'<img src="data:{logo_mime};base64,{logo_b64}" style="height:28px;width:auto;" alt="logo" />'
+        f'<img src="data:{logo_mime};base64,{logo_b64}" style="height:28px;width:auto;max-width:120px;" alt="logo" />'
         if logo_b64 else '<div class="logo-box">OVR</div>'
     )
 
@@ -1461,6 +1475,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   <div class="stat"><div class="stat-value">{total_vms}</div><div class="stat-label">Total VMs</div></div>
   <div class="divider"></div>
   <div class="stat"><div class="stat-value green">{running}</div><div class="stat-label">Running</div></div>
+  <div class="stat"><div class="stat-value" style="color:#ca8a04">{paused}</div><div class="stat-label">Paused</div></div>
   <div class="stat"><div class="stat-value orange">{stopped}</div><div class="stat-label">Stopped</div></div>
   <div class="stat">
     <div class="stat-value {'red' if error_vms else 'green'}">{error_vms if error_vms else "✓"}</div>
