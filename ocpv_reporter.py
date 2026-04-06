@@ -365,6 +365,16 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict, include_cloudinit:
     mem_used_gib = bytes_to_gib(mem_used_b) if mem_used_b else "—"
     mem_avail_gib = bytes_to_gib(mem_avail_b) if mem_avail_b else "—"
 
+    # ── Right-sizing utilisation (only meaningful for Running VMs with metrics) ─
+    cpu_util_pct: Optional[float] = None
+    mem_util_pct: Optional[float] = None
+    if phase == "Running" and cpu_used_cores and cpu_cores > 0:
+        cpu_util_pct = round(cpu_used_cores / cpu_cores * 100, 1)
+    if phase == "Running" and mem_used_b:
+        mem_alloc_gib = parse_memory_to_gib(mem_req or mem_guest)
+        if mem_alloc_gib > 0:
+            mem_util_pct = round(bytes_to_gib(mem_used_b) / mem_alloc_gib * 100, 1)
+
     return {
         # Identity
         "namespace": ns,
@@ -397,6 +407,9 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict, include_cloudinit:
         "net_tx_bps": format_bps(net_tx) if net_tx else "—",
         # Error state (empty string = healthy)
         "error_state": error_state,
+        # Right-sizing (None = no data)
+        "cpu_util_pct": cpu_util_pct,
+        "mem_util_pct": mem_util_pct,
     }
 
 
@@ -408,16 +421,22 @@ def export_csv(records: list[dict], output_path: str):
     """Export vInfo-style CSV."""
     fields = [
         "namespace", "name", "phase", "configured_state", "node",
-        "cpu_cores", "cpu_used_cores", "mem_requested", "mem_limit",
-        "mem_used_gib", "mem_avail_gib", "total_disk_gib",
-        "ip_addresses", "os_name", "machine_type",
+        "cpu_cores", "cpu_used_cores", "cpu_util_pct", "mem_requested", "mem_limit",
+        "mem_used_gib", "mem_avail_gib", "mem_util_pct", "total_disk_gib",
+        "right_sizing", "ip_addresses", "os_name", "machine_type",
         "disk_read_bps", "disk_write_bps", "disk_read_iops", "disk_write_iops",
         "net_rx_bps", "net_tx_bps", "created"
     ]
+    # Compute plain-text right-sizing label for CSV (no HTML)
+    enriched = []
+    for r in records:
+        row = dict(r)
+        row["right_sizing"] = rs_badge(r.get("cpu_util_pct"), r.get("mem_util_pct"), RS_DEFAULTS, html=False)
+        enriched.append(row)
     with open(output_path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
-        w.writerows(records)
+        w.writerows(enriched)
     print(f"  ✓ CSV exported: {output_path}")
 
 
@@ -466,7 +485,54 @@ def na(val) -> str:
     return str(val)
 
 
-def generate_html(records: list, cluster_name: str, namespace_filter: Optional[str], generated_at: str, logo_b64: Optional[str] = None, logo_mime: str = "image/png") -> str:
+# Default right-sizing thresholds (overridden by CLI flags)
+RS_DEFAULTS = {"cpu_low": 20.0, "cpu_high": 80.0, "mem_low": 20.0, "mem_high": 80.0}
+
+
+def rs_badge(cpu_pct: Optional[float], mem_pct: Optional[float], thresholds: dict, html: bool = True) -> str:
+    """Return a right-sizing recommendation badge.
+
+    Signals:
+      Over-provisioned  — both CPU and memory below their low threshold
+      Under-provisioned — either CPU or memory above their high threshold
+      Right-sized       — everything in range
+      No data           — VM not running or metrics unavailable
+    """
+    if cpu_pct is None and mem_pct is None:
+        return '<span class="rs-nodata">—</span>' if html else "—"
+
+    cpu_over  = cpu_pct is not None and cpu_pct < thresholds["cpu_low"]
+    cpu_under = cpu_pct is not None and cpu_pct > thresholds["cpu_high"]
+    mem_over  = mem_pct is not None and mem_pct < thresholds["mem_low"]
+    mem_under = mem_pct is not None and mem_pct > thresholds["mem_high"]
+
+    cpu_str = f"CPU {cpu_pct}%" if cpu_pct is not None else ""
+    mem_str = f"Mem {mem_pct}%" if mem_pct is not None else ""
+    detail  = ", ".join(filter(None, [cpu_str, mem_str]))
+
+    if cpu_under or mem_under:
+        label = "Under-provisioned"
+        css   = "rs-under"
+        color = "#dc2626"
+    elif cpu_over and mem_over:
+        label = "Over-provisioned"
+        css   = "rs-over"
+        color = "#f59e0b"
+    elif cpu_over or mem_over:
+        label = "Partially over"
+        css   = "rs-partover"
+        color = "#d97706"
+    else:
+        label = "Right-sized"
+        css   = "rs-ok"
+        color = "#16a34a"
+
+    if html:
+        return f'<span class="{css}" title="{detail}">{label}</span>'
+    return f"{label} ({detail})"
+
+
+def generate_html(records: list, cluster_name: str, namespace_filter: Optional[str], generated_at: str, logo_b64: Optional[str] = None, logo_mime: str = "image/png", rs_thresholds: Optional[dict] = None) -> str:
     total_vms   = len(records)
     running     = sum(1 for r in records if r["phase"] == "Running")
     stopped     = sum(1 for r in records if r["phase"] == "Stopped")
@@ -480,6 +546,8 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
         if gib >= 1024:
             return f'{gib/1024:.1f}<span class="stat-unit">TiB</span>'
         return f'{gib}<span class="stat-unit">GiB</span>'
+
+    _rs = rs_thresholds or RS_DEFAULTS
 
     # ── vInfo rows ────────────────────────────────────────────────────────────
     vinfo_rows = ""
@@ -495,6 +563,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
           <td>{na(r['mem_requested'])}</td>
           <td class="num metric">{na(r['mem_used_gib'])} GiB</td>
           <td class="num">{r['total_disk_gib']} GiB</td>
+          <td>{rs_badge(r.get('cpu_util_pct'), r.get('mem_util_pct'), _rs)}</td>
           <td>{na(r['ip_addresses'])}</td>
           <td>{na(r['os_name'])}</td>
           <td>{na(r['created'][:10] if r['created'] else '')}</td>
@@ -668,6 +737,16 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     .stat-value.purple {{ color: var(--purple); }}
     .stat-value.cyan {{ color: var(--cyan); }}
     .stat-unit {{ font-size: 0.52em; color: var(--text-dim); font-weight: 400; margin-left: 2px; }}
+    /* Right-sizing badges */
+    .rs-ok, .rs-over, .rs-partover, .rs-under, .rs-nodata {{
+      display: inline-block; padding: 1px 7px; border-radius: 9px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }}
+    .rs-ok      {{ background: #dcfce7; color: #15803d; }}
+    .rs-over    {{ background: #fef9c3; color: #854d0e; }}
+    .rs-partover{{ background: #ffedd5; color: #9a3412; }}
+    .rs-under   {{ background: #fee2e2; color: #b91c1c; }}
+    .rs-nodata  {{ color: var(--text-dim); }}
     .stat-label {{
       font-size: 10px;
       text-transform: uppercase;
@@ -1017,9 +1096,10 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
           <th onclick="sortTable('tbl-vinfo',6)">Mem Alloc</th>
           <th onclick="sortTable('tbl-vinfo',7)">Mem Used ●</th>
           <th onclick="sortTable('tbl-vinfo',8)">Disk (GiB)</th>
-          <th onclick="sortTable('tbl-vinfo',9)">IP Address</th>
-          <th onclick="sortTable('tbl-vinfo',10)">Guest OS</th>
-          <th onclick="sortTable('tbl-vinfo',11)">Created</th>
+          <th onclick="sortTable('tbl-vinfo',9)">Sizing</th>
+          <th onclick="sortTable('tbl-vinfo',10)">IP Address</th>
+          <th onclick="sortTable('tbl-vinfo',11)">Guest OS</th>
+          <th onclick="sortTable('tbl-vinfo',12)">Created</th>
         </tr>
       </thead>
       <tbody>{vinfo_rows}</tbody>
@@ -1180,7 +1260,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
 # PDF report (landscape A4, light theme, all sections)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Optional[str], generated_at: str, logo_b64: Optional[str] = None, logo_mime: str = "image/png") -> str:
+def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Optional[str], generated_at: str, logo_b64: Optional[str] = None, logo_mime: str = "image/png", rs_thresholds: Optional[dict] = None) -> str:
     """Generate a print-optimised HTML for PDF export (landscape, light, all tabs)."""
     total_vms  = len(records)
     running    = sum(1 for r in records if r["phase"] == "Running")
@@ -1190,6 +1270,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
     total_disk  = round(sum(r["total_disk_gib"] for r in records), 1)
     error_vms   = sum(1 for r in records if r.get("error_state"))
     namespaces  = sorted(set(r["namespace"] for r in records))
+    _rs = rs_thresholds or RS_DEFAULTS
 
     def fmt_gib(gib: float) -> str:
         if gib >= 1024:
@@ -1227,6 +1308,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
             f"<td>{cell(r['mem_requested'])}</td>"
             f"<td style='text-align:right'>{cell(r['mem_used_gib'])} GiB</td>"
             f"<td style='text-align:right'>{r['total_disk_gib']} GiB</td>"
+            f"<td>{rs_badge(r.get('cpu_util_pct'), r.get('mem_util_pct'), _rs)}</td>"
             f"<td>{cell(r['ip_addresses'])}</td>"
             f"<td>{cell(r['os_name'])}</td>"
             f"<td>{r['created'][:10] if r['created'] else '—'}</td></tr>"
@@ -1299,6 +1381,14 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
     .stat-label {{ font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }}
     .green {{ color: #16a34a; }} .red {{ color: #dc2626; }} .orange {{ color: #f59e0b; }} .blue {{ color: #2563eb; }} .purple {{ color: #a855f7; }} .cyan {{ color: #0891b2; }}
     .stat-unit {{ font-size: 0.55em; color: #aaa; font-weight: 400; margin-left: 2px; }}
+    .rs-ok, .rs-over, .rs-partover, .rs-under, .rs-nodata {{
+      display: inline-block; padding: 1px 4px; border-radius: 4px; font-size: 6.5pt; font-weight: 700;
+    }}
+    .rs-ok      {{ background: #dcfce7; color: #15803d; }}
+    .rs-over    {{ background: #fef9c3; color: #854d0e; }}
+    .rs-partover{{ background: #ffedd5; color: #9a3412; }}
+    .rs-under   {{ background: #fee2e2; color: #b91c1c; }}
+    .rs-nodata  {{ color: #aaa; }}
     .divider {{ width: 1px; background: #ccc; align-self: stretch; }}
 
     /* ── Section headings ── */
@@ -1369,14 +1459,14 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   <div class="section-heading">vInfo <span class="section-count">{total_vms}</span></div>
   <table>
     <colgroup>
-      <col style="width:9%"><col style="width:10%"><col style="width:7%"><col style="width:9%">
-      <col style="width:5%"><col style="width:7%"><col style="width:7%"><col style="width:7%">
-      <col style="width:7%"><col style="width:10%"><col style="width:14%"><col style="width:8%">
+      <col style="width:8%"><col style="width:9%"><col style="width:6%"><col style="width:8%">
+      <col style="width:4%"><col style="width:6%"><col style="width:6%"><col style="width:6%">
+      <col style="width:6%"><col style="width:9%"><col style="width:8%"><col style="width:12%"><col style="width:7%">
     </colgroup>
     <thead><tr>
       <th>Namespace</th><th>VM Name</th><th>Status</th><th>Node</th>
       <th>vCPUs</th><th>CPU Used ●</th><th>Mem Alloc</th><th>Mem Used ●</th>
-      <th>Disk (GiB)</th><th>IP Address</th><th>Guest OS</th><th>Created</th>
+      <th>Disk (GiB)</th><th>Sizing</th><th>IP Address</th><th>Guest OS</th><th>Created</th>
     </tr></thead>
     <tbody>{vinfo_rows}</tbody>
   </table>
@@ -1473,6 +1563,14 @@ Examples:
     parser.add_argument("--pdf", action="store_true", help="Export a PDF report (requires: pip install weasyprint)")
     parser.add_argument("--logo", help="Path to a custom logo image (PNG/JPEG/SVG) embedded in the report header")
     parser.add_argument("--show-cloudinit", action="store_true", help="Include CloudInit config drives in the vDisk report (hidden by default)")
+    parser.add_argument("--rs-cpu-low",  type=float, default=20.0, metavar="PCT",
+                        help="CPU utilisation %% below which a VM is flagged as over-provisioned (default: 20)")
+    parser.add_argument("--rs-cpu-high", type=float, default=80.0, metavar="PCT",
+                        help="CPU utilisation %% above which a VM is flagged as under-provisioned (default: 80)")
+    parser.add_argument("--rs-mem-low",  type=float, default=20.0, metavar="PCT",
+                        help="Memory utilisation %% below which a VM is flagged as over-provisioned (default: 20)")
+    parser.add_argument("--rs-mem-high", type=float, default=80.0, metavar="PCT",
+                        help="Memory utilisation %% above which a VM is flagged as under-provisioned (default: 80)")
     parser.add_argument("--version", action="version", version=f"ocpv-reporter {TOOL_VERSION}")
     args = parser.parse_args()
 
@@ -1535,8 +1633,16 @@ Examples:
         logo_b64 = base64.b64encode(logo_path.read_bytes()).decode()
         print(f"  ✓ Logo loaded: {args.logo}")
 
+    # ── Right-sizing thresholds ───────────────────────────────────────────────
+    rs_thresholds = {
+        "cpu_low":  args.rs_cpu_low,
+        "cpu_high": args.rs_cpu_high,
+        "mem_low":  args.rs_mem_low,
+        "mem_high": args.rs_mem_high,
+    }
+
     # ── Export ────────────────────────────────────────────────────────────────
-    html = generate_html(records, cluster_name, args.namespace, generated_at, logo_b64, logo_mime)
+    html = generate_html(records, cluster_name, args.namespace, generated_at, logo_b64, logo_mime, rs_thresholds)
 
     if not args.no_html:
         html_path = output_dir / f"ocpv-report-{ts}.html"
@@ -1547,7 +1653,7 @@ Examples:
         try:
             from weasyprint import HTML as WeasyprintHTML
             pdf_path = output_dir / f"ocpv-report-{ts}.pdf"
-            pdf_html = generate_pdf_html(records, cluster_name, args.namespace, generated_at, logo_b64, logo_mime)
+            pdf_html = generate_pdf_html(records, cluster_name, args.namespace, generated_at, logo_b64, logo_mime, rs_thresholds)
             with open(pdf_path, "wb") as pdf_fh:
                 WeasyprintHTML(string=pdf_html, base_url=str(output_dir.resolve())).write_pdf(pdf_fh)
             print(f"  ✓ PDF report:  {pdf_path}")
