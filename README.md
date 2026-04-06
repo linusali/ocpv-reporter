@@ -192,7 +192,7 @@ rules:
 ```
 
 ```bash
-oc apply -f examples/ocpv-reporter-clusterrole.yaml
+oc apply -f deploy/ocpv-reporter-clusterrole.yaml
 oc adm policy add-cluster-role-to-user ocpv-reporter <your-user>
 oc adm policy add-cluster-role-to-user cluster-monitoring-view <your-user>
 ```
@@ -234,7 +234,7 @@ PRs and issues welcome. Please open an issue before large changes.
 ```bash
 git clone https://github.com/ocpv-reporter/ocpv-reporter.git
 cd ocpv-reporter
-python3 -m pytest test_ocpv_reporter.py
+python3 -m pytest tests/
 ```
 
 ---
