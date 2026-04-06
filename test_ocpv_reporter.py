@@ -113,8 +113,17 @@ def test_parse_vm_basic():
     assert rec["ip_addresses"] == "10.128.0.55"
     assert rec["os_name"] == "Red Hat Enterprise Linux 9.4"
     assert rec["total_disk_gib"] == 50.0
-    assert len(rec["disks"]) == 2   # dataVolume + cloudInit
+    assert len(rec["disks"]) == 1   # dataVolume only (cloudInit excluded by default)
     assert len(rec["nics"]) == 1
+
+
+def test_parse_vm_show_cloudinit():
+    """With include_cloudinit=True, CloudInit volume appears in disk list."""
+    vmis = {("dev-vms", "test-vm"): SAMPLE_VMI["dev-vms/test-vm"]}
+    rec = parse_vm(SAMPLE_VM, vmis, SAMPLE_PVCS, {}, include_cloudinit=True)
+    assert len(rec["disks"]) == 2   # dataVolume + cloudInit
+    types = [d["type"] for d in rec["disks"]]
+    assert "CloudInit" in types
 
 
 def test_parse_vm_no_vmi():

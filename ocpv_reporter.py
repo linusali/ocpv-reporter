@@ -233,7 +233,7 @@ def collect_pvcs(namespace: Optional[str]) -> dict:
     return result
 
 
-def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict) -> dict:
+def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict, include_cloudinit: bool = False) -> dict:
     """Merge VM spec + VMI runtime + PVC data + Prometheus metrics into one record."""
     meta = vm.get("metadata", {})
     spec = vm.get("spec", {})
@@ -299,10 +299,11 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict) -> dict:
                 "size": "—", "phase": "N/A", "storageClass": img
             })
         elif "cloudInitNoCloud" in vol or "cloudInitConfigDrive" in vol:
-            disk_records.append({
-                "name": disk_name, "type": "CloudInit",
-                "size": "—", "phase": "N/A", "storageClass": "—"
-            })
+            if include_cloudinit:
+                disk_records.append({
+                    "name": disk_name, "type": "CloudInit",
+                    "size": "—", "phase": "N/A", "storageClass": "—"
+                })
 
     # ── NICs ──────────────────────────────────────────────────────────────────
     interfaces = domain.get("devices", {}).get("interfaces", [])
@@ -566,6 +567,8 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       --green:     #22c55e;
       --blue:      #3b82f6;
       --orange:    #f59e0b;
+      --purple:    #a855f7;
+      --cyan:      #06b6d4;
       --tab-h:     48px;
     }}
 
@@ -662,6 +665,8 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     .stat-value.red {{ color: var(--accent2); }}
     .stat-value.orange {{ color: var(--orange); }}
     .stat-value.blue {{ color: var(--blue); }}
+    .stat-value.purple {{ color: var(--purple); }}
+    .stat-value.cyan {{ color: var(--cyan); }}
     .stat-unit {{ font-size: 0.52em; color: var(--text-dim); font-weight: 400; margin-left: 2px; }}
     .stat-label {{
       font-size: 10px;
@@ -954,11 +959,11 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       <div class="stat-label">Total vCPUs</div>
     </div>
     <div class="stat">
-      <div class="stat-value">{fmt_gib(total_ram)}</div>
+      <div class="stat-value purple">{fmt_gib(total_ram)}</div>
       <div class="stat-label">Total RAM</div>
     </div>
     <div class="stat">
-      <div class="stat-value">{fmt_gib(total_disk)}</div>
+      <div class="stat-value cyan">{fmt_gib(total_disk)}</div>
       <div class="stat-label">Total Disk</div>
     </div>
     <div class="stat-divider"></div>
@@ -1292,7 +1297,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
     .stat {{ text-align: center; }}
     .stat-value {{ font-size: 13pt; font-weight: 700; line-height: 1.1; }}
     .stat-label {{ font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }}
-    .green {{ color: #16a34a; }} .red {{ color: #dc2626; }} .orange {{ color: #f59e0b; }} .blue {{ color: #2563eb; }}
+    .green {{ color: #16a34a; }} .red {{ color: #dc2626; }} .orange {{ color: #f59e0b; }} .blue {{ color: #2563eb; }} .purple {{ color: #a855f7; }} .cyan {{ color: #0891b2; }}
     .stat-unit {{ font-size: 0.55em; color: #aaa; font-weight: 400; margin-left: 2px; }}
     .divider {{ width: 1px; background: #ccc; align-self: stretch; }}
 
@@ -1351,8 +1356,8 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   </div>
   <div class="divider"></div>
   <div class="stat"><div class="stat-value blue">{total_vcpu}</div><div class="stat-label">vCPUs</div></div>
-  <div class="stat"><div class="stat-value">{fmt_gib(total_ram)}</div><div class="stat-label">Total RAM</div></div>
-  <div class="stat"><div class="stat-value">{fmt_gib(total_disk)}</div><div class="stat-label">Total Disk</div></div>
+  <div class="stat"><div class="stat-value purple">{fmt_gib(total_ram)}</div><div class="stat-label">Total RAM</div></div>
+  <div class="stat"><div class="stat-value cyan">{fmt_gib(total_disk)}</div><div class="stat-label">Total Disk</div></div>
   <div class="divider"></div>
   <div class="stat"><div class="stat-value">{len(namespaces)}</div><div class="stat-label">Namespaces</div></div>
   <div class="divider"></div>
@@ -1467,6 +1472,7 @@ Examples:
     parser.add_argument("--no-csv", action="store_true", help="Skip CSV export")
     parser.add_argument("--pdf", action="store_true", help="Export a PDF report (requires: pip install weasyprint)")
     parser.add_argument("--logo", help="Path to a custom logo image (PNG/JPEG/SVG) embedded in the report header")
+    parser.add_argument("--show-cloudinit", action="store_true", help="Include CloudInit config drives in the vDisk report (hidden by default)")
     parser.add_argument("--version", action="version", version=f"ocpv-reporter {TOOL_VERSION}")
     args = parser.parse_args()
 
@@ -1512,7 +1518,7 @@ Examples:
 
     # ── Build records ─────────────────────────────────────────────────────────
     print("\n[3/3] Building report...")
-    records = [parse_vm(vm, vmis, pvcs, metrics) for vm in vms]
+    records = [parse_vm(vm, vmis, pvcs, metrics, include_cloudinit=args.show_cloudinit) for vm in vms]
     records.sort(key=lambda r: (r["namespace"], r["name"]))
     print(f"  ✓ Processed {len(records)} VM records")
 
