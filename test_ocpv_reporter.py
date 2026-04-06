@@ -7,7 +7,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from ocpv_reporter import bytes_to_gib, bytes_to_mib, format_bps, parse_vm, phase_badge, parse_memory_to_gib
+from ocpv_reporter import bytes_to_gib, bytes_to_mib, format_bps, parse_vm, phase_badge, parse_memory_to_gib, rs_badge, RS_DEFAULTS
 
 
 # ── Utility tests ─────────────────────────────────────────────────────────────
@@ -221,3 +221,46 @@ def test_parse_vm_error_state_unschedulable():
     vmis = {("dev-vms", "test-vm"): unschedulable_vmi}
     rec = parse_vm(SAMPLE_VM, vmis, SAMPLE_PVCS, {})
     assert rec["error_state"] == "ErrorUnschedulable"
+
+
+# ── Right-sizing ───────────────────────────────────────────────────────────────
+
+def test_rs_badge_no_data():
+    assert rs_badge(None, None, RS_DEFAULTS, html=False) == "—"
+
+
+def test_rs_badge_right_sized():
+    result = rs_badge(50.0, 50.0, RS_DEFAULTS, html=False)
+    assert result.startswith("Right-sized")
+
+
+def test_rs_badge_over_provisioned():
+    result = rs_badge(10.0, 10.0, RS_DEFAULTS, html=False)
+    assert result.startswith("Over-provisioned")
+
+
+def test_rs_badge_under_provisioned():
+    result = rs_badge(90.0, 90.0, RS_DEFAULTS, html=False)
+    assert result.startswith("Under-provisioned")
+
+
+def test_rs_badge_partial_over():
+    """Only CPU is over-provisioned, memory is in range."""
+    result = rs_badge(5.0, 50.0, RS_DEFAULTS, html=False)
+    assert result.startswith("Partially over")
+
+
+def test_parse_vm_util_pct_running():
+    """Running VM with CPU metrics produces cpu_util_pct."""
+    # SAMPLE_VM has 4 vCPUs; inject cpu_usage metric of 2.0 cores → 50%
+    vmis = {("dev-vms", "test-vm"): SAMPLE_VMI["dev-vms/test-vm"]}
+    metrics = {"cpu_usage": {("dev-vms", "test-vm"): 2.0}}
+    rec = parse_vm(SAMPLE_VM, vmis, SAMPLE_PVCS, metrics)
+    assert rec["cpu_util_pct"] == 50.0
+
+
+def test_parse_vm_util_pct_stopped():
+    """Stopped VM (no VMI) has no utilisation data."""
+    rec = parse_vm(SAMPLE_VM, {}, SAMPLE_PVCS, {})
+    assert rec["cpu_util_pct"] is None
+    assert rec["mem_util_pct"] is None
