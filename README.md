@@ -102,6 +102,7 @@ options:
   --pdf               Export a PDF report (requires: pip install weasyprint)
   --logo PATH         Path to a custom logo image (PNG/JPEG/SVG/GIF/WebP)
                       embedded inline in the HTML and PDF report header
+                      (see Logo Guidelines below)
   --show-cloudinit    Include CloudInit config drives in the vDisk report
                       (hidden by default — they carry no real storage)
   --rs-cpu-low PCT    CPU utilisation % below which a VM is flagged as
@@ -134,6 +135,31 @@ The default thresholds are **20 % (low) / 80 % (high)**. Override them with `--r
 > **Note:** This is a point-in-time snapshot based on the 30-minute Prometheus average at report generation time. For production right-sizing decisions, compare against peak/average data over a longer window (7 d, 30 d).
 
 The CSV export includes `cpu_util_pct`, `mem_util_pct`, and `right_sizing` columns for further analysis in spreadsheet tools.
+
+---
+
+## Logo Guidelines
+
+A custom logo is embedded inline (base64) in both the HTML and PDF reports, so the output files remain fully self-contained.
+
+| Property | HTML report | PDF report |
+|----------|-------------|------------|
+| Display height | 36 px | 28 px |
+| Max display width | 160 px | 120 px |
+| Aspect ratio | Preserved (width: auto) | Preserved (width: auto) |
+
+**Best practices:**
+
+| Format | Recommendation |
+|--------|---------------|
+| **SVG** | Preferred — scales perfectly at any resolution, smallest file size |
+| **PNG** | Use a source at least 72 px tall (2× display height for HiDPI/Retina) |
+| **JPEG** | Avoid for logos — lossy compression causes artefacts on text/edges |
+
+- **Landscape/wide logos** (company wordmark, e.g. 4:1 ratio) work best — they sit naturally next to the report title without taking up vertical space
+- **Square icons** work well too — they will be scaled to the display height
+- Keep the background **transparent** (SVG or PNG with alpha) so the logo blends with both the dark HTML header and the white PDF header
+- Avoid excessively wide images (> 400 px source width) — they are capped at the max-width above anyway
 
 ---
 

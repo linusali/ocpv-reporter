@@ -622,7 +622,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     ns_pills = " ".join(f'<span class="ns-pill">{n}</span>' for n in namespaces)
     logo_html = (
         f'<img src="data:{logo_mime};base64,{logo_b64}" '
-        f'style="height:36px;width:auto;border-radius:6px;" alt="logo" />'
+        f'style="height:36px;width:auto;max-width:160px;border-radius:6px;" alt="logo" />'
         if logo_b64 else '<div class="logo-icon">OVR</div>'
     )
 
@@ -1290,7 +1290,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
         return f'{gib}<span class="stat-unit">GiB</span>'
 
     logo_html = (
-        f'<img src="data:{logo_mime};base64,{logo_b64}" style="height:28px;width:auto;" alt="logo" />'
+        f'<img src="data:{logo_mime};base64,{logo_b64}" style="height:28px;width:auto;max-width:120px;" alt="logo" />'
         if logo_b64 else '<div class="logo-box">OVR</div>'
     )
 
