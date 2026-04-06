@@ -1,4 +1,4 @@
-# ocpv-reporter
+# ovr
 
 **RVTools for OpenShift Virtualization.**
 
@@ -43,32 +43,32 @@ pip install weasyprint   # required for --pdf export
 
 ```bash
 # Clone
-git clone https://github.com/ocpv-reporter/ocpv-reporter.git
+git clone https://github.com/linusali/ocpv-reporter.git
 cd ocpv-reporter
 
 # Log in to your cluster
 oc login https://api.your-cluster.example.com:6443
 
 # Run (all namespaces)
-python3 ocpv_reporter.py
+python3 ovr.py
 
 # Run for a specific namespace
-python3 ocpv_reporter.py -n my-vm-namespace
+python3 ovr.py -n my-vm-namespace
 
 # Output to a specific directory
-python3 ocpv_reporter.py -o /tmp/reports
+python3 ovr.py -o /tmp/reports
 
 # Export a PDF report (requires: pip install weasyprint)
-python3 ocpv_reporter.py --pdf
+python3 ovr.py --pdf
 
 # PDF with a custom logo in the header
-python3 ocpv_reporter.py --pdf --logo /path/to/company-logo.png
+python3 ovr.py --pdf --logo /path/to/company-logo.png
 
 # Skip Prometheus metrics (faster, inventory/config only)
-python3 ocpv_reporter.py --no-metrics
+python3 ovr.py --no-metrics
 
 # Include CloudInit config drives in the vDisk tab (hidden by default)
-python3 ocpv_reporter.py --show-cloudinit
+python3 ovr.py --show-cloudinit
 ```
 
 The report files are created in the current directory (or `-o`):
@@ -86,7 +86,7 @@ ocpv-vnetwork-20250403-143022.csv
 ## All Options
 
 ```
-usage: ocpv_reporter.py [-h] [-n NAMESPACE] [-o OUTPUT] [--no-metrics]
+usage: ovr.py [-h] [-n NAMESPACE] [-o OUTPUT] [--no-metrics]
                         [--prom-url PROM_URL] [--no-html] [--no-csv]
                         [--pdf] [--logo LOGO] [--show-cloudinit]
                         [--rs-cpu-low PCT] [--rs-cpu-high PCT]
@@ -165,7 +165,7 @@ If you're running in an environment where the route is not reachable directly (e
 
 ```bash
 oc port-forward svc/thanos-querier 9091:9091 -n openshift-monitoring &
-python3 ocpv_reporter.py --prom-url localhost:9091
+python3 ovr.py --prom-url localhost:9091
 ```
 
 ---
@@ -178,7 +178,7 @@ If you don't want to use `cluster-admin`, create a dedicated role:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: ocpv-reporter
+  name: ovr
 rules:
 - apiGroups: ["kubevirt.io"]
   resources: ["virtualmachines", "virtualmachineinstances"]
@@ -192,8 +192,8 @@ rules:
 ```
 
 ```bash
-oc apply -f deploy/ocpv-reporter-clusterrole.yaml
-oc adm policy add-cluster-role-to-user ocpv-reporter <your-user>
+oc apply -f deploy/ovr-clusterrole.yaml
+oc adm policy add-cluster-role-to-user ovr <your-user>
 oc adm policy add-cluster-role-to-user cluster-monitoring-view <your-user>
 ```
 
@@ -241,11 +241,11 @@ The image includes `weasyprint` so `--pdf` works out of the box. All report file
 ### Build locally
 
 ```bash
-docker build -t ocpv-reporter .
+docker build -t ovr .
 docker run --rm \
   -v ~/.kube:/root/.kube:ro \
   -v $(pwd)/reports:/output \
-  ocpv-reporter
+  ovr
 ```
 
 ---
@@ -269,7 +269,7 @@ docker run --rm \
 PRs and issues welcome. Please open an issue before large changes.
 
 ```bash
-git clone https://github.com/ocpv-reporter/ocpv-reporter.git
+git clone https://github.com/linusali/ocpv-reporter.git
 cd ocpv-reporter
 python3 -m pytest tests/
 ```

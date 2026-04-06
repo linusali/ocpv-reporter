@@ -1,15 +1,15 @@
 ---
-# Minimum RBAC to run ocpv-reporter without cluster-admin
-# Apply with: oc apply -f examples/ocpv-reporter-clusterrole.yaml
-# Grant with: oc adm policy add-cluster-role-to-user ocpv-reporter <your-user>
+# Minimum RBAC to run ovr without cluster-admin
+# Apply with: oc apply -f examples/ovr-clusterrole.yaml
+# Grant with: oc adm policy add-cluster-role-to-user ovr <your-user>
 #             oc adm policy add-cluster-role-to-user cluster-monitoring-view <your-user>
 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: ocpv-reporter
+  name: ovr
   labels:
-    app.kubernetes.io/name: ocpv-reporter
+    app.kubernetes.io/name: ovr
 rules:
   - apiGroups: ["kubevirt.io"]
     resources:

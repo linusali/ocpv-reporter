@@ -1,5 +1,5 @@
 """
-Unit tests for ocpv_reporter.py
+Unit tests for ovr.py
 These test the data parsing logic without needing a live cluster.
 """
 import sys
@@ -7,7 +7,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from ocpv_reporter import bytes_to_gib, bytes_to_mib, format_bps, parse_vm, phase_badge, parse_memory_to_gib, rs_badge, RS_DEFAULTS
+from ovr import bytes_to_gib, bytes_to_mib, format_bps, parse_vm, phase_badge, parse_memory_to_gib, rs_badge, RS_DEFAULTS
 
 
 # ── Utility tests ─────────────────────────────────────────────────────────────

@@ -13,7 +13,7 @@ RUN curl -sSL \
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
-LABEL org.opencontainers.image.title="ocpv-reporter" \
+LABEL org.opencontainers.image.title="ovr" \
       org.opencontainers.image.description="RVTools-equivalent for OpenShift Virtualization" \
       org.opencontainers.image.source="https://github.com/linusali/ocpv-reporter" \
       org.opencontainers.image.licenses="Apache-2.0"
@@ -35,11 +35,11 @@ RUN pip install --no-cache-dir weasyprint
 COPY --from=oc-downloader /usr/local/bin/oc /usr/local/bin/oc
 
 WORKDIR /app
-COPY ocpv_reporter.py .
+COPY ovr.py .
 
 # /output  → mount a host directory here to receive generated reports
 # /root/.kube → mount your kubeconfig here (or pass KUBECONFIG env var)
 VOLUME ["/output", "/root/.kube"]
 
-ENTRYPOINT ["python3", "/app/ocpv_reporter.py"]
+ENTRYPOINT ["python3", "/app/ovr.py"]
 CMD ["-o", "/output"]

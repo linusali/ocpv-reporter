@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-ocpv-reporter — RVTools-equivalent for OpenShift Virtualization
+ovr — RVTools-equivalent for OpenShift Virtualization
 Collects VM inventory + real consumption data from OCP-V clusters
 and produces an HTML report + CSV export.
 
 Author: Mohammed Salih Puthenpurayil (Mo)
 License: Apache 2.0
-GitHub: https://github.com/ocpv-reporter/ocpv-reporter
+GitHub: https://github.com/linusali/ocpv-reporter
 """
 
 import argparse
@@ -479,6 +479,18 @@ def phase_badge(phase: str) -> str:
     return f'<span class="badge" style="background:{bg};color:{fg}">{phase}</span>'
 
 
+def vm_phase_badge(r: dict) -> str:
+    """Phase badge for a VM record — shows Error when error_state is set."""
+    error_state = r.get("error_state", "")
+    if error_state:
+        label = "Error" if error_state in ("ErrorUnschedulable", "Unschedulable") else error_state
+        return (
+            f'<span class="badge" style="background:#ef4444;color:#2d0a0a" '
+            f'title="{error_state}">{label}</span>'
+        )
+    return phase_badge(r["phase"])
+
+
 def na(val) -> str:
     if val in (None, "", "—", 0, 0.0):
         return '<span class="na">—</span>'
@@ -556,7 +568,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
         <tr>
           <td><span class="ns-tag">{r['namespace']}</span></td>
           <td class="vm-name">{r['name']}</td>
-          <td>{phase_badge(r['phase'])}</td>
+          <td>{vm_phase_badge(r)}</td>
           <td>{na(r['node'])}</td>
           <td class="num">{r['cpu_cores']}</td>
           <td class="num metric">{na(r['cpu_used_cores'])}</td>
@@ -619,7 +631,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ocpv-reporter — {cluster_name}</title>
+  <title>ovr — {cluster_name}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -1002,14 +1014,14 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
   <div class="logo">
     {logo_html}
     <div>
-      <div class="logo-text">ocpv-reporter</div>
+      <div class="logo-text">ovr</div>
       <div class="logo-sub">OpenShift Virtualization Inventory</div>
     </div>
   </div>
   <div class="header-meta">
     <strong>{cluster_name}</strong>
     Generated {generated_at}
-    <br>ocpv-reporter v{TOOL_VERSION}
+    <br>ovr v{TOOL_VERSION}
   </div>
 </header>
 
@@ -1179,7 +1191,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
 </div>
 
 <div class="footer">
-  <a href="https://github.com/ocpv-reporter/ocpv-reporter">ocpv-reporter</a>
+  <a href="https://github.com/linusali/ocpv-reporter">ovr</a>
   · Apache 2.0 · ● = live Prometheus metrics (30m avg)
   · Report generated {generated_at}
 </div>
@@ -1293,6 +1305,16 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
                 f'border-radius:3px;font-size:8px;font-weight:700;'
                 f'text-transform:uppercase;white-space:nowrap">{phase}</span>')
 
+    def vm_badge(r: dict) -> str:
+        """PDF phase badge — shows Error when error_state is set."""
+        error_state = r.get("error_state", "")
+        if error_state:
+            label = "Error" if error_state in ("ErrorUnschedulable", "Unschedulable") else error_state
+            return (f'<span style="background:#dc2626;color:#fff;padding:1px 6px;'
+                    f'border-radius:3px;font-size:8px;font-weight:700;'
+                    f'text-transform:uppercase;white-space:nowrap" title="{error_state}">{label}</span>')
+        return badge(r["phase"])
+
     def cell(v) -> str:
         return "—" if v in (None, "", "—", 0, 0.0) else str(v)
 
@@ -1301,7 +1323,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
     for r in records:
         vinfo_rows += (
             f"<tr><td>{r['namespace']}</td><td><b>{r['name']}</b></td>"
-            f"<td>{badge(r['phase'])}</td>"
+            f"<td>{vm_badge(r)}</td>"
             f"<td>{cell(r['node'])}</td>"
             f"<td style='text-align:right'>{r['cpu_cores']}</td>"
             f"<td style='text-align:right'>{cell(r['cpu_used_cores'])}</td>"
@@ -1427,7 +1449,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
 <div class="header">
   {logo_html}
   <div>
-    <div class="header-title">ocpv-reporter</div>
+    <div class="header-title">ovr</div>
     <div class="header-sub">OpenShift Virtualization Inventory</div>
   </div>
   <div class="header-meta">
@@ -1508,7 +1530,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   </table>
 </div>
 
-<p class="footer">● = live Prometheus metrics (30-minute average) &nbsp;|&nbsp; ocpv-reporter v{TOOL_VERSION}</p>
+<p class="footer">● = live Prometheus metrics (30-minute average) &nbsp;|&nbsp; ovr v{TOOL_VERSION}</p>
 
 </body>
 </html>"""
@@ -1528,30 +1550,30 @@ def get_cluster_name() -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ocpv-reporter — RVTools-equivalent for OpenShift Virtualization",
+        description="ovr — RVTools-equivalent for OpenShift Virtualization",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Report all namespaces
-  python3 ocpv_reporter.py
+  python3 ovr.py
 
   # Report a specific namespace
-  python3 ocpv_reporter.py -n my-vms
+  python3 ovr.py -n my-vms
 
   # Output to a custom directory
-  python3 ocpv_reporter.py -o /tmp/reports
+  python3 ovr.py -o /tmp/reports
 
   # Export PDF report
-  python3 ocpv_reporter.py --pdf
+  python3 ovr.py --pdf
 
   # Export PDF with a custom logo
-  python3 ocpv_reporter.py --pdf --logo /path/to/logo.png
+  python3 ovr.py --pdf --logo /path/to/logo.png
 
   # Skip Prometheus metrics (config/inventory only)
-  python3 ocpv_reporter.py --no-metrics
+  python3 ovr.py --no-metrics
 
   # Use a custom Prometheus URL (e.g., port-forwarded)
-  python3 ocpv_reporter.py --prom-url localhost:9090
+  python3 ovr.py --prom-url localhost:9090
         """
     )
     parser.add_argument("-n", "--namespace", help="Namespace to report on (default: all namespaces)")
@@ -1571,10 +1593,10 @@ Examples:
                         help="Memory utilisation %% below which a VM is flagged as over-provisioned (default: 20)")
     parser.add_argument("--rs-mem-high", type=float, default=80.0, metavar="PCT",
                         help="Memory utilisation %% above which a VM is flagged as under-provisioned (default: 80)")
-    parser.add_argument("--version", action="version", version=f"ocpv-reporter {TOOL_VERSION}")
+    parser.add_argument("--version", action="version", version=f"ovr {TOOL_VERSION}")
     args = parser.parse_args()
 
-    print(f"\n  ocpv-reporter v{TOOL_VERSION}")
+    print(f"\n  ovr v{TOOL_VERSION}")
     print("  ══════════════════════════════════")
 
     # Verify oc login
