@@ -14,13 +14,15 @@ The generated HTML report has three tabs, mirroring the RVTools experience:
 
 | Tab | What's in it |
 |-----|-------------|
-| **vInfo** | VM name, namespace, status, node, vCPUs, allocated memory, **actual CPU/memory usage**, IP, OS, creation date |
+| **vInfo** | VM name, namespace, status, node, vCPUs, allocated memory, **actual CPU/memory usage**, right-sizing recommendation, IP, OS, creation date |
 | **vDisk** | All disks per VM — type (DataVolume, PVC, ContainerDisk), size, storage class, PVC phase, **live read/write throughput and IOPS** |
 | **vNetwork** | All NICs per VM — model, MAC address, binding type (masquerade/bridge/SR-IOV), network attachment, **live RX/TX throughput** |
 
 Every column is **sortable**. Every table has a **live filter** search box. Every tab has a **one-click CSV export** of visible rows.
 
 Metrics marked with **●** are live 30-minute averages pulled from the in-cluster Prometheus/Thanos endpoint.
+
+The summary bar at the top shows Total VMs, Running/Stopped/Error counts, total vCPUs, RAM, and Disk allocated across the cluster.
 
 ---
 
@@ -32,7 +34,6 @@ Metrics marked with **●** are live 30-minute averages pulled from the in-clust
 
 Optional:
 ```bash
-pip install kubernetes   # enables direct k8s API access (faster for large clusters)
 pip install weasyprint   # required for --pdf export
 ```
 
@@ -65,6 +66,9 @@ python3 ocpv_reporter.py --pdf --logo /path/to/company-logo.png
 
 # Skip Prometheus metrics (faster, inventory/config only)
 python3 ocpv_reporter.py --no-metrics
+
+# Include CloudInit config drives in the vDisk tab (hidden by default)
+python3 ocpv_reporter.py --show-cloudinit
 ```
 
 The report files are created in the current directory (or `-o`):
@@ -84,20 +88,52 @@ ocpv-vnetwork-20250403-143022.csv
 ```
 usage: ocpv_reporter.py [-h] [-n NAMESPACE] [-o OUTPUT] [--no-metrics]
                         [--prom-url PROM_URL] [--no-html] [--no-csv]
-                        [--pdf] [--logo LOGO] [--version]
+                        [--pdf] [--logo LOGO] [--show-cloudinit]
+                        [--rs-cpu-low PCT] [--rs-cpu-high PCT]
+                        [--rs-mem-low PCT] [--rs-mem-high PCT] [--version]
 
 options:
-  -n, --namespace   Namespace to report on (default: all namespaces)
-  -o, --output      Output directory (default: current directory)
-  --no-metrics      Skip Prometheus metrics — inventory/config only (faster)
-  --prom-url        Override Prometheus URL, e.g. localhost:9090 for port-forwarding
-  --no-html         Skip HTML report
-  --no-csv          Skip CSV exports
-  --pdf             Export a PDF report (requires: pip install weasyprint)
-  --logo PATH       Path to a custom logo image (PNG/JPEG/SVG/GIF/WebP)
-                    embedded inline in the HTML and PDF report header
-  --version         Show version
+  -n, --namespace     Namespace to report on (default: all namespaces)
+  -o, --output        Output directory (default: current directory)
+  --no-metrics        Skip Prometheus metrics — inventory/config only (faster)
+  --prom-url          Override Prometheus URL, e.g. localhost:9090 for port-forwarding
+  --no-html           Skip HTML report
+  --no-csv            Skip CSV exports
+  --pdf               Export a PDF report (requires: pip install weasyprint)
+  --logo PATH         Path to a custom logo image (PNG/JPEG/SVG/GIF/WebP)
+                      embedded inline in the HTML and PDF report header
+  --show-cloudinit    Include CloudInit config drives in the vDisk report
+                      (hidden by default — they carry no real storage)
+  --rs-cpu-low PCT    CPU utilisation % below which a VM is flagged as
+                      over-provisioned (default: 20)
+  --rs-cpu-high PCT   CPU utilisation % above which a VM is flagged as
+                      under-provisioned (default: 80)
+  --rs-mem-low PCT    Memory utilisation % below which a VM is flagged as
+                      over-provisioned (default: 20)
+  --rs-mem-high PCT   Memory utilisation % above which a VM is flagged as
+                      under-provisioned (default: 80)
+  --version           Show version
 ```
+
+---
+
+## Right-Sizing
+
+When Prometheus metrics are available, the **Sizing** column in the vInfo tab shows a colour-coded recommendation for each running VM based on its current CPU and memory utilisation:
+
+| Badge | Meaning |
+|-------|---------|
+| **Right-sized** (green) | CPU and memory utilisation both within thresholds |
+| **Over-provisioned** (yellow) | Both CPU and memory below the low threshold |
+| **Partially over** (orange) | One resource below the low threshold, the other in range |
+| **Under-provisioned** (red) | CPU or memory above the high threshold |
+| **—** | VM is stopped, or no Prometheus data available |
+
+The default thresholds are **20 % (low) / 80 % (high)**. Override them with `--rs-cpu-low`, `--rs-cpu-high`, `--rs-mem-low`, `--rs-mem-high`.
+
+> **Note:** This is a point-in-time snapshot based on the 30-minute Prometheus average at report generation time. For production right-sizing decisions, compare against peak/average data over a longer window (7 d, 30 d).
+
+The CSV export includes `cpu_util_pct`, `mem_util_pct`, and `right_sizing` columns for further analysis in spreadsheet tools.
 
 ---
 
@@ -185,7 +221,8 @@ docker run --rm \
 - [ ] Snapshot inventory tab (vSnapshot)
 - [ ] Live migration history tab
 - [ ] Helm chart / CronJob for scheduled reporting
-- [ ] VM right-sizing recommendations (based on Prometheus data)
+- [x] VM right-sizing recommendations (based on Prometheus data)
+- [ ] Right-sizing using Prometheus range queries (historical peak/average)
 - [ ] Multi-cluster report aggregation
 
 ---
@@ -197,7 +234,7 @@ PRs and issues welcome. Please open an issue before large changes.
 ```bash
 git clone https://github.com/ocpv-reporter/ocpv-reporter.git
 cd ocpv-reporter
-python3 -m pytest tests/   # run unit tests
+python3 -m pytest test_ocpv_reporter.py
 ```
 
 ---
