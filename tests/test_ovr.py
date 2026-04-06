@@ -264,3 +264,20 @@ def test_parse_vm_util_pct_stopped():
     rec = parse_vm(SAMPLE_VM, {}, SAMPLE_PVCS, {})
     assert rec["cpu_util_pct"] is None
     assert rec["mem_util_pct"] is None
+
+
+def test_parse_vm_paused_via_condition():
+    """VMI with Paused=True condition → phase == 'Paused', no error_state."""
+    paused_vmi = {
+        "status": {
+            "phase": "Running",
+            "conditions": [
+                {"type": "Paused", "status": "True"},
+                {"type": "Ready", "status": "False", "reason": "ReadinessGatesNotReady"},
+            ],
+        }
+    }
+    vmis = {("dev-vms", "test-vm"): paused_vmi}
+    rec = parse_vm(SAMPLE_VM, vmis, SAMPLE_PVCS, {})
+    assert rec["phase"] == "Paused"
+    assert rec["error_state"] == ""
