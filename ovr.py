@@ -1032,7 +1032,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       <div class="stat-label">Stopped</div>
     </div>
     <div class="stat">
-      <div class="stat-value {'red' if error_vms else 'green'}">{error_vms if error_vms else "✓"}</div>
+      <div class="stat-value red">{error_vms}</div>
       <div class="stat-label">Errors</div>
     </div>
     <div class="stat-divider"></div>
@@ -1452,7 +1452,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   <div class="stat"><div class="stat-value" style="color:#ca8a04">{paused}</div><div class="stat-label">Paused</div></div>
   <div class="stat"><div class="stat-value gray">{stopped}</div><div class="stat-label">Stopped</div></div>
   <div class="stat">
-    <div class="stat-value {'red' if error_vms else 'green'}">{error_vms if error_vms else "✓"}</div>
+    <div class="stat-value red">{error_vms}</div>
     <div class="stat-label">Errors</div>
   </div>
   <div class="divider"></div>
