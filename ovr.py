@@ -626,7 +626,6 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
         </tr>"""
 
     # ── Summary cards ─────────────────────────────────────────────────────────
-    ns_pills = " ".join(f'<span class="ns-pill">{n}</span>' for n in namespaces)
     logo_html = (
         f'<img src="data:{logo_mime};base64,{logo_b64}" '
         f'style="height:36px;width:auto;max-width:160px;border-radius:6px;" alt="logo" />'
@@ -783,31 +782,6 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       background: var(--border);
       align-self: center;
     }}
-    .ns-section {{
-      margin-left: auto;
-    }}
-    .ns-section-label {{
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--text-dim);
-      margin-bottom: 6px;
-    }}
-    .ns-pills {{
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }}
-    .ns-pill {{
-      background: #1e2d4a;
-      border: 1px solid #2a3f6a;
-      color: var(--blue);
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-family: 'IBM Plex Mono', monospace;
-    }}
-
     /* ── Tabs ── */
     .tabs {{
       display: flex;
@@ -1077,10 +1051,6 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       <div class="stat-value">{len(namespaces)}</div>
       <div class="stat-label">Namespaces</div>
     </div>
-  </div>
-  <div class="ns-section">
-    <div class="ns-section-label">Namespaces</div>
-    <div class="ns-pills">{ns_pills}</div>
   </div>
 </div>
 
