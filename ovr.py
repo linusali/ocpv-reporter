@@ -305,23 +305,6 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict, include_cloudinit:
                     "size": "—", "phase": "N/A", "storageClass": "—"
                 })
 
-    # ── NICs ──────────────────────────────────────────────────────────────────
-    interfaces = domain.get("devices", {}).get("interfaces", [])
-    networks = tmpl.get("networks", [])
-    net_map = {n["name"]: n for n in networks}
-    nic_records = []
-    for iface in interfaces:
-        iface_name = iface.get("name", "")
-        net = net_map.get(iface_name, {})
-        net_type = "Pod" if "pod" in net else net.get("multus", {}).get("networkName", "multus")
-        model = iface.get("model", "virtio")
-        mac = iface.get("macAddress", "—")
-        binding = next((k for k in ["masquerade", "bridge", "sriov", "passt"] if k in iface), "?")
-        nic_records.append({
-            "name": iface_name, "model": model,
-            "mac": mac, "binding": binding, "network": net_type
-        })
-
     # ── VMI runtime ───────────────────────────────────────────────────────────
     vmi = vmis.get((ns, name), {})
     vmi_status = vmi.get("status", {}) if vmi else {}
@@ -337,10 +320,29 @@ def parse_vm(vm: dict, vmis: dict, pvcs: dict, metrics: dict, include_cloudinit:
     os_name = guest_os.get("prettyName", guest_os.get("name", "—"))
     machine_type = vmi_status.get("machine", {}).get("type", "—")
 
-    # Runtime IPs from VMI interfaces
+    # Runtime IPs from VMI interfaces — keyed by interface name
     vmi_ifaces = vmi_status.get("interfaces", [])
+    vmi_ip_map = {i.get("name", ""): i.get("ipAddress", "") for i in vmi_ifaces}
     ip_addresses = [i.get("ipAddress", "") for i in vmi_ifaces if i.get("ipAddress")]
     ip_str = ", ".join(ip_addresses) if ip_addresses else "—"
+
+    # ── NICs ──────────────────────────────────────────────────────────────────
+    interfaces = domain.get("devices", {}).get("interfaces", [])
+    networks = tmpl.get("networks", [])
+    net_map = {n["name"]: n for n in networks}
+    nic_records = []
+    for iface in interfaces:
+        iface_name = iface.get("name", "")
+        net = net_map.get(iface_name, {})
+        net_type = "Pod" if "pod" in net else net.get("multus", {}).get("networkName", "multus")
+        model = iface.get("model", "virtio")
+        mac = iface.get("macAddress", "—")
+        binding = next((k for k in ["masquerade", "bridge", "sriov", "passt"] if k in iface), "?")
+        nic_records.append({
+            "name": iface_name, "model": model,
+            "mac": mac, "binding": binding, "network": net_type,
+            "ip_address": vmi_ip_map.get(iface_name, "—"),
+        })
 
     # ── Error / problematic state ─────────────────────────────────────────────
     error_state = ""
@@ -620,7 +622,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
           <td class="mono">{na(n['mac'])}</td>
           <td><span class="type-tag">{n['binding']}</span></td>
           <td>{na(n['network'])}</td>
-          <td>{na(r['ip_addresses'])}</td>
+          <td>{na(n['ip_address'])}</td>
           <td class="metric">{na(r['net_rx_bps'])}</td>
           <td class="metric">{na(r['net_tx_bps'])}</td>
         </tr>"""
@@ -1346,7 +1348,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
                 f"<td>{n['name']}</td><td>{n['model']}</td>"
                 f"<td style='font-family:monospace'>{cell(n['mac'])}</td>"
                 f"<td>{n['binding']}</td><td>{cell(n['network'])}</td>"
-                f"<td>{cell(r['ip_addresses'])}</td>"
+                f"<td>{cell(n['ip_address'])}</td>"
                 f"<td>{cell(r['net_rx_bps'])}</td><td>{cell(r['net_tx_bps'])}</td></tr>"
             )
 
