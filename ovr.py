@@ -658,6 +658,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       --yellow:    #eab308;
       --purple:    #a855f7;
       --cyan:      #06b6d4;
+      --gray:      #9ca3af;
       --tab-h:     48px;
     }}
 
@@ -757,6 +758,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
     .stat-value.blue {{ color: var(--blue); }}
     .stat-value.purple {{ color: var(--purple); }}
     .stat-value.cyan {{ color: var(--cyan); }}
+    .stat-value.gray {{ color: var(--gray); }}
     .stat-unit {{ font-size: 0.52em; color: var(--text-dim); font-weight: 400; margin-left: 2px; }}
     /* Right-sizing badges */
     .rs-ok, .rs-over, .rs-partover, .rs-under, .rs-nodata {{
@@ -1050,7 +1052,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       <div class="stat-label">Paused</div>
     </div>
     <div class="stat">
-      <div class="stat-value orange">{stopped}</div>
+      <div class="stat-value gray">{stopped}</div>
       <div class="stat-label">Stopped</div>
     </div>
     <div class="stat">
@@ -1415,7 +1417,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
     .stat {{ text-align: center; }}
     .stat-value {{ font-size: 13pt; font-weight: 700; line-height: 1.1; }}
     .stat-label {{ font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }}
-    .green {{ color: #16a34a; }} .red {{ color: #dc2626; }} .orange {{ color: #f59e0b; }} .blue {{ color: #2563eb; }} .purple {{ color: #a855f7; }} .cyan {{ color: #0891b2; }}
+    .green {{ color: #16a34a; }} .red {{ color: #dc2626; }} .orange {{ color: #f59e0b; }} .blue {{ color: #2563eb; }} .purple {{ color: #a855f7; }} .cyan {{ color: #0891b2; }} .gray {{ color: #9ca3af; }}
     .stat-unit {{ font-size: 0.55em; color: #aaa; font-weight: 400; margin-left: 2px; }}
     .rs-ok, .rs-over, .rs-partover, .rs-under, .rs-nodata {{
       display: inline-block; padding: 1px 4px; border-radius: 4px; font-size: 6.5pt; font-weight: 700;
@@ -1476,7 +1478,7 @@ def generate_pdf_html(records: list, cluster_name: str, namespace_filter: Option
   <div class="divider"></div>
   <div class="stat"><div class="stat-value green">{running}</div><div class="stat-label">Running</div></div>
   <div class="stat"><div class="stat-value" style="color:#ca8a04">{paused}</div><div class="stat-label">Paused</div></div>
-  <div class="stat"><div class="stat-value orange">{stopped}</div><div class="stat-label">Stopped</div></div>
+  <div class="stat"><div class="stat-value gray">{stopped}</div><div class="stat-label">Stopped</div></div>
   <div class="stat">
     <div class="stat-value {'red' if error_vms else 'green'}">{error_vms if error_vms else "✓"}</div>
     <div class="stat-label">Errors</div>
