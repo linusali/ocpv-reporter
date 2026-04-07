@@ -1022,7 +1022,7 @@ def generate_html(records: list, cluster_name: str, namespace_filter: Optional[s
       <div class="stat-label">Running</div>
     </div>
     <div class="stat">
-      <div class="stat-value yellow">{paused}</div>
+      <div class="stat-value orange">{paused}</div>
       <div class="stat-label">Paused</div>
     </div>
     <div class="stat">
